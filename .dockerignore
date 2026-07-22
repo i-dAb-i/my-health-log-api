@@ -1,0 +1,13 @@
+venv
+.venv
+__pycache__
+.pytest_cache
+.git
+.gitignore
+.env
+.vscode
+.idea
+tests
+docs
+*.log
+data.json
