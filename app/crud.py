@@ -6,32 +6,103 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.health_service import analyze_health
 
+import secrets
+
+from app.security import hash_password, verify_password
 
 # ─────────────────────────────────────────
 # 사용자 CRUD
 # ─────────────────────────────────────────
 
+def get_user_by_email(
+    db: Session,
+    email: str,
+) -> models.User | None:
+    """이메일로 사용자를 조회한다."""
+
+    statement = select(models.User).where(
+        func.lower(models.User.email) == email.lower()
+    )
+
+    return db.scalar(statement)
+
+
+def create_patient_code(
+    db: Session,
+) -> str:
+    """중복되지 않는 대상자 연결 코드를 생성한다."""
+
+    while True:
+        patient_code = secrets.token_hex(4).upper()
+
+        existing_id = db.scalar(
+            select(models.User.id).where(
+                models.User.patient_code == patient_code
+            )
+        )
+
+        if existing_id is None:
+            return patient_code
+
+
 def create_user(
     db: Session,
     user_data: schemas.UserCreate,
 ) -> models.User:
-    """새로운 사용자를 DB에 저장한다."""
+    """새로운 사용자 계정을 생성한다."""
 
-    user = models.User(
+    patient_code = None
+
+    if user_data.role == models.UserRole.PATIENT:
+        patient_code = create_patient_code(db)
+
+    db_user = models.User(
+        email=str(user_data.email).lower(),
+        password_hash=hash_password(user_data.password),
         name=user_data.name.strip(),
+        role=user_data.role,
+        patient_code=patient_code,
     )
 
-    db.add(user)
+    db.add(db_user)
     db.commit()
-    db.refresh(user)
+    db.refresh(db_user)
+
+    return db_user
+
+
+def authenticate_user(
+    db: Session,
+    email: str,
+    password: str,
+) -> models.User | None:
+    """이메일과 비밀번호로 사용자를 인증한다."""
+
+    user = get_user_by_email(
+        db=db,
+        email=email,
+    )
+
+    if user is None:
+        return None
+
+    if not verify_password(
+        plain_password=password,
+        hashed_password=user.password_hash,
+    ):
+        return None
 
     return user
 
 
-def get_users(db: Session) -> list[models.User]:
+def get_users(
+    db: Session,
+) -> list[models.User]:
     """전체 사용자를 조회한다."""
 
-    statement = select(models.User).order_by(models.User.id)
+    statement = select(models.User).order_by(
+        models.User.id.asc()
+    )
 
     return list(db.scalars(statement).all())
 
@@ -40,10 +111,12 @@ def get_user(
     db: Session,
     user_id: int,
 ) -> models.User | None:
-    """ID로 사용자 한 명을 조회한다."""
+    """사용자 ID로 사용자를 조회한다."""
 
-    return db.get(models.User, user_id)
-
+    return db.get(
+        models.User,
+        user_id,
+    )
 
 # ─────────────────────────────────────────
 # 건강 기록 CRUD
@@ -52,11 +125,9 @@ def get_user(
 def create_health_record(
     db: Session,
     record_data: schemas.HealthRecordCreate,
+    created_by_user_id: int,
 ) -> models.HealthRecord:
-    """
-    건강 상태를 분석하고,
-    입력값과 분석 결과를 DB에 저장한다.
-    """
+    """건강 기록을 계산하고 데이터베이스에 저장한다."""
 
     analysis = analyze_health(
         weight=record_data.weight,
@@ -67,37 +138,43 @@ def create_health_record(
         steps=record_data.steps,
     )
 
-    health_record = models.HealthRecord(
+    db_record = models.HealthRecord(
         **record_data.model_dump(),
+        created_by_user_id=created_by_user_id,
         **analysis,
     )
 
-    db.add(health_record)
+    db.add(db_record)
     db.commit()
-    db.refresh(health_record)
+    db.refresh(db_record)
 
-    return health_record
+    return db_record
 
 
 def get_health_records(
     db: Session,
-    user_id: int | None = None,
+    user_ids: list[int] | None = None,
 ) -> list[models.HealthRecord]:
-    """건강 기록을 최신 측정일 순으로 조회한다."""
+    """허용된 사용자들의 건강 기록을 조회한다."""
 
-    statement = select(models.HealthRecord)
+    if user_ids == []:
+        return []
 
-    if user_id is not None:
-        statement = statement.where(
-            models.HealthRecord.user_id == user_id
-        )
-
-    statement = statement.order_by(
+    statement = select(
+        models.HealthRecord
+    ).order_by(
         models.HealthRecord.date.desc(),
         models.HealthRecord.id.desc(),
     )
 
-    return list(db.scalars(statement).all())
+    if user_ids is not None:
+        statement = statement.where(
+            models.HealthRecord.user_id.in_(user_ids)
+        )
+
+    return list(
+        db.scalars(statement).all()
+    )
 
 def get_health_record(
     db: Session,
@@ -158,18 +235,23 @@ def search_health_records(
     db: Session,
     start_date: DateType,
     end_date: DateType,
-    user_id: int | None = None,
+    user_ids: list[int] | None = None,
 ) -> list[models.HealthRecord]:
-    """측정일 범위로 건강 기록을 검색한다."""
+    """기간과 접근 가능한 사용자 범위로 기록을 검색한다."""
 
-    statement = select(models.HealthRecord).where(
+    if user_ids == []:
+        return []
+
+    statement = select(
+        models.HealthRecord
+    ).where(
         models.HealthRecord.date >= start_date,
         models.HealthRecord.date <= end_date,
     )
 
-    if user_id is not None:
+    if user_ids is not None:
         statement = statement.where(
-            models.HealthRecord.user_id == user_id
+            models.HealthRecord.user_id.in_(user_ids)
         )
 
     statement = statement.order_by(
@@ -177,14 +259,29 @@ def search_health_records(
         models.HealthRecord.id.desc(),
     )
 
-    return list(db.scalars(statement).all())
+    return list(
+        db.scalars(statement).all()
+    )
 
 
 def get_health_stats(
     db: Session,
-    user_id: int | None = None,
-) -> dict[str, int | float | None]:
-    """전체 또는 특정 사용자의 건강 기록 통계를 계산한다."""
+    user_ids: list[int] | None = None,
+) -> dict[str, object]:
+    """접근 가능한 건강 기록의 평균 통계를 계산한다."""
+
+    if user_ids == []:
+        return {
+            "user_id": None,
+            "record_count": 0,
+            "average_weight": None,
+            "average_bmi": None,
+            "average_systolic": None,
+            "average_diastolic": None,
+            "average_blood_sugar": None,
+            "average_steps": None,
+            "average_sleep_hours": None,
+        }
 
     statement = select(
         func.count(models.HealthRecord.id),
@@ -197,9 +294,9 @@ def get_health_stats(
         func.avg(models.HealthRecord.sleep_hours),
     )
 
-    if user_id is not None:
+    if user_ids is not None:
         statement = statement.where(
-            models.HealthRecord.user_id == user_id
+            models.HealthRecord.user_id.in_(user_ids)
         )
 
     (
@@ -212,6 +309,33 @@ def get_health_stats(
         average_steps,
         average_sleep_hours,
     ) = db.execute(statement).one()
+
+    def round_or_none(value: object) -> float | None:
+        if value is None:
+            return None
+
+        return round(float(value), 2)
+
+    response_user_id = None
+
+    if user_ids is not None and len(user_ids) == 1:
+        response_user_id = user_ids[0]
+
+    return {
+        "user_id": response_user_id,
+        "record_count": int(record_count or 0),
+        "average_weight": round_or_none(average_weight),
+        "average_bmi": round_or_none(average_bmi),
+        "average_systolic": round_or_none(average_systolic),
+        "average_diastolic": round_or_none(average_diastolic),
+        "average_blood_sugar": round_or_none(
+            average_blood_sugar
+        ),
+        "average_steps": round_or_none(average_steps),
+        "average_sleep_hours": round_or_none(
+            average_sleep_hours
+        ),
+    }
 
     def round_or_none(value: object) -> float | None:
         if value is None:
@@ -344,3 +468,180 @@ def get_weekly_report(
         "previous_week": previous_week,
         "changes": changes,
     }
+
+def get_user_by_patient_code(
+    db: Session,
+    patient_code: str,
+) -> models.User | None:
+    """연결 코드로 대상자를 조회한다."""
+
+    normalized_code = patient_code.strip().upper()
+
+    statement = select(models.User).where(
+        models.User.patient_code == normalized_code,
+        models.User.role == models.UserRole.PATIENT,
+    )
+
+    return db.scalar(statement)
+
+
+def get_guardian_link_by_pair(
+    db: Session,
+    guardian_id: int,
+    patient_id: int,
+) -> models.GuardianPatientLink | None:
+    """동일한 보호자·대상자 연결이 있는지 조회한다."""
+
+    statement = select(
+        models.GuardianPatientLink
+    ).where(
+        models.GuardianPatientLink.guardian_id == guardian_id,
+        models.GuardianPatientLink.patient_id == patient_id,
+    )
+
+    return db.scalar(statement)
+
+
+def create_guardian_link(
+    db: Session,
+    guardian_id: int,
+    patient_id: int,
+    relation_type: str | None,
+) -> models.GuardianPatientLink:
+    """보호자·대상자 연결 요청을 생성한다."""
+
+    normalized_relation = None
+
+    if relation_type:
+        normalized_relation = relation_type.strip() or None
+
+    db_link = models.GuardianPatientLink(
+        guardian_id=guardian_id,
+        patient_id=patient_id,
+        relation_type=normalized_relation,
+        status=models.LinkStatus.PENDING,
+    )
+
+    db.add(db_link)
+    db.commit()
+    db.refresh(db_link)
+
+    return db_link
+
+def get_guardian_link(
+    db: Session,
+    link_id: int,
+) -> models.GuardianPatientLink | None:
+    """연결 관계를 ID로 조회한다."""
+
+    return db.get(
+        models.GuardianPatientLink,
+        link_id,
+    )
+
+
+def get_guardian_links_for_user(
+    db: Session,
+    user: models.User,
+) -> list[models.GuardianPatientLink]:
+    """현재 사용자의 역할에 맞는 연결 관계를 조회한다."""
+
+    statement = select(
+        models.GuardianPatientLink
+    ).order_by(
+        models.GuardianPatientLink.id.desc()
+    )
+
+    if user.role == models.UserRole.GUARDIAN:
+        statement = statement.where(
+            models.GuardianPatientLink.guardian_id == user.id
+        )
+
+    elif user.role == models.UserRole.PATIENT:
+        statement = statement.where(
+            models.GuardianPatientLink.patient_id == user.id
+        )
+
+    return list(
+        db.scalars(statement).all()
+    )
+
+
+def update_guardian_link_status(
+    db: Session,
+    link: models.GuardianPatientLink,
+    new_status: models.LinkStatus,
+) -> models.GuardianPatientLink:
+    """보호자 연결 요청의 상태를 변경한다."""
+
+    link.status = new_status
+
+    db.commit()
+    db.refresh(link)
+
+    return link
+
+
+def get_approved_patient_ids(
+    db: Session,
+    guardian_id: int,
+) -> list[int]:
+    """보호자가 조회할 수 있는 승인된 대상자 ID를 반환한다."""
+
+    statement = select(
+        models.GuardianPatientLink.patient_id
+    ).where(
+        models.GuardianPatientLink.guardian_id == guardian_id,
+        models.GuardianPatientLink.status
+        == models.LinkStatus.APPROVED,
+    )
+
+    return list(
+        db.scalars(statement).all()
+    )
+
+def get_accessible_patients(
+    db: Session,
+    user: models.User,
+) -> list[models.User]:
+    """현재 사용자가 접근할 수 있는 대상자 목록을 조회한다."""
+
+    statement = select(
+        models.User
+    ).where(
+        models.User.role == models.UserRole.PATIENT,
+        models.User.is_active.is_(True),
+    ).order_by(
+        models.User.name.asc(),
+        models.User.id.asc(),
+    )
+
+    if user.role == models.UserRole.ADMIN:
+        return list(
+            db.scalars(statement).all()
+        )
+
+    if user.role == models.UserRole.PATIENT:
+        statement = statement.where(
+            models.User.id == user.id
+        )
+
+        return list(
+            db.scalars(statement).all()
+        )
+
+    approved_patient_ids = get_approved_patient_ids(
+        db=db,
+        guardian_id=user.id,
+    )
+
+    if not approved_patient_ids:
+        return []
+
+    statement = statement.where(
+        models.User.id.in_(approved_patient_ids)
+    )
+
+    return list(
+        db.scalars(statement).all()
+    )

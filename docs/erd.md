@@ -1,22 +1,37 @@
 # 마이 헬스 로그 API ERD
 
-## 테이블 관계
-
-한 명의 사용자는 여러 개의 건강 기록을 가질 수 있다.
-
 ```mermaid
 erDiagram
-    USERS ||--o{ HEALTH_RECORDS : has
+    USERS ||--o{ HEALTH_RECORDS : subject
+    USERS ||--o{ HEALTH_RECORDS : creates
+    USERS ||--o{ GUARDIAN_PATIENT_LINKS : guardian
+    USERS ||--o{ GUARDIAN_PATIENT_LINKS : patient
 
     USERS {
         int id PK
+        varchar email UK
+        varchar password_hash
         varchar name
+        varchar role
+        boolean is_active
+        varchar patient_code UK
         datetime created_at
+    }
+
+    GUARDIAN_PATIENT_LINKS {
+        int id PK
+        int guardian_id FK
+        int patient_id FK
+        varchar relation_type
+        varchar status
+        datetime created_at
+        datetime updated_at
     }
 
     HEALTH_RECORDS {
         int id PK
         int user_id FK
+        int created_by_user_id FK
         date date
         float weight
         float height
@@ -37,42 +52,32 @@ erDiagram
     }
 ```
 
-## users
+## 사용자 역할
 
-| 컬럼 | 자료형 | 제약조건 | 설명 |
-|---|---|---|---|
-| id | Integer | PK, Auto Increment | 사용자 식별자 |
-| name | Varchar(100) | NOT NULL | 사용자 이름 |
-| created_at | DateTime | NOT NULL | 사용자 생성 시각 |
+| 역할 | 설명 |
+|---|---|
+| `patient` | 자신의 건강 기록을 관리하는 대상자 |
+| `guardian` | 승인된 대상자의 건강 기록을 조회·등록하는 보호자 |
+| `admin` | 전체 사용자와 건강 기록을 조회·관리하는 관리자 |
 
-## health_records
+## 보호자·대상자 관계
 
-| 컬럼 | 자료형 | 제약조건 | 설명 |
-|---|---|---|---|
-| id | Integer | PK, Auto Increment | 건강 기록 식별자 |
-| user_id | Integer | FK, NOT NULL | 사용자 식별자 |
-| date | Date | NOT NULL | 건강 측정일 |
-| weight | Float | NOT NULL | 몸무게(kg) |
-| height | Float | NOT NULL | 키(cm) |
-| systolic | Integer | NOT NULL | 수축기 혈압 |
-| diastolic | Integer | NOT NULL | 이완기 혈압 |
-| blood_sugar | Integer | NOT NULL | 공복 혈당 |
-| steps | Integer | 기본값 0 | 걸음 수 |
-| step_grade | Varchar(20) | NOT NULL | 걸음 수 등급 |
-| sleep_hours | Float | 기본값 0 | 수면 시간 |
-| memo | Text | 기본값 빈 문자열 | 사용자 메모 |
-| bmi | Float | NOT NULL | 계산된 BMI |
-| bmi_category | Varchar(20) | NOT NULL | BMI 분류 |
-| bp_category | Varchar(20) | NOT NULL | 혈압 분류 |
-| sugar_category | Varchar(20) | NOT NULL | 혈당 분류 |
-| warnings | JSON | 기본값 빈 배열 | 건강 경고 목록 |
-| created_at | DateTime | NOT NULL | 생성 시각 |
-| updated_at | DateTime | NOT NULL | 수정 시각 |
+`guardian_patient_links`는 보호자와 대상자를 연결하는 다대다 관계 테이블이다.
 
-## 설계 원칙
+- 보호자 한 명이 여러 대상자와 연결될 수 있다.
+- 대상자 한 명이 여러 보호자와 연결될 수 있다.
+- 동일한 보호자·대상자 조합은 한 번만 저장된다.
+- 연결 상태는 `pending`, `approved`, `rejected` 중 하나다.
 
-- 사용자 한 명은 여러 건강 기록을 가진다.
-- 사용자 삭제 시 해당 사용자의 건강 기록도 함께 삭제한다.
-- BMI와 각 건강 분류는 FastAPI에서 계산한 뒤 DB에 저장한다.
-- 주간 리포트는 별도 테이블에 저장하지 않고 `health_records`를 조회해 계산한다.
-- 걸음 수 등급은 건강 기록을 등록하거나 수정할 때 다시 계산한다.
+## 건강 기록 소유자와 작성자
+
+- `health_records.user_id`: 건강 기록의 실제 대상자
+- `health_records.created_by_user_id`: 기록을 입력한 사용자
+
+대상자가 직접 입력하면 두 값은 동일하다.
+
+보호자가 대신 입력하면 `user_id`와 `created_by_user_id`가 서로 다르다.
+
+## 주간 리포트
+
+주간 리포트는 별도 테이블에 저장하지 않는다. `health_records` 데이터를 기간별로 조회하여 최근 7일과 직전 7일의 평균을 계산한다.

@@ -1,4 +1,15 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+    container_name: health-log-frontend
+    environment:
+      API_BASE_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    restart: unless-stopped
   db:
     image: postgres:17
     container_name: health-log-db
@@ -41,6 +52,9 @@ services:
       # Docker 내부에서는 localhost가 아니라 DB 서비스명 사용
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
 
     ports:
       - "9090:8000"

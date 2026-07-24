@@ -1,34 +1,110 @@
 from datetime import date as DateType, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.models import LinkStatus, UserRole
 
 # ─────────────────────────────────────────
 # 사용자 스키마
 # ─────────────────────────────────────────
 
 class UserCreate(BaseModel):
+    email: EmailStr
+
+    password: str = Field(
+        min_length=8,
+        max_length=128,
+        description="8자 이상 128자 이하 비밀번호",
+    )
+
     name: str = Field(
         min_length=1,
         max_length=100,
-        description="사용자 이름",
-        examples=["은다빈"],
     )
+
+    role: UserRole = UserRole.PATIENT
 
 
 class UserResponse(BaseModel):
     id: int
+    email: EmailStr
     name: str
+    role: UserRole
+    is_active: bool
+    patient_code: str | None = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
 
+class PatientSummaryResponse(BaseModel):
+    id: int
+    email: EmailStr
+    name: str
+    role: UserRole
+
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 # ─────────────────────────────────────────
 # 건강 기록 공통 입력 스키마
 # ─────────────────────────────────────────
 
 class HealthRecordBase(BaseModel):
+    date: DateType
+
+    weight: float = Field(
+        ge=20,
+        le=300,
+        description="체중(kg): 20~300",
+    )
+
+    height: float = Field(
+        ge=50,
+        le=250,
+        description="키(cm): 50~250",
+    )
+
+    systolic: int = Field(
+        ge=60,
+        le=250,
+        description="수축기 혈압: 60~250",
+    )
+
+    diastolic: int = Field(
+        ge=30,
+        le=150,
+        description="이완기 혈압: 30~150",
+    )
+
+    blood_sugar: int = Field(
+        ge=40,
+        le=500,
+        description="공복 혈당: 40~500",
+    )
+
+    steps: int = Field(
+        ge=0,
+        le=100000,
+        description="걸음 수: 0~100000",
+    )
+
+    sleep_hours: float = Field(
+        ge=0,
+        le=24,
+        description="수면 시간: 0~24",
+    )
+
+    memo: str | None = Field(
+        default=None,
+        max_length=500,
+    )
     date: DateType = Field(
         description="건강 측정일",
         examples=["2026-07-21"],
@@ -109,6 +185,7 @@ class HealthRecordUpdate(HealthRecordBase):
 class HealthRecordResponse(HealthRecordBase):
     id: int
     user_id: int
+    created_by_user_id: int | None = None
 
     bmi: float
     bmi_category: str
@@ -171,3 +248,34 @@ class WeeklyReportResponse(BaseModel):
     current_week: WeeklyAverageResponse
     previous_week: WeeklyAverageResponse
     changes: WeeklyChangeResponse
+
+class GuardianLinkCreate(BaseModel):
+    patient_code: str = Field(
+        min_length=1,
+        max_length=20,
+        description="대상자에게 발급된 연결 코드",
+    )
+
+    relation_type: str | None = Field(
+        default=None,
+        max_length=50,
+        description="부모, 자녀, 배우자, 간병인 등",
+    )
+
+
+class GuardianLinkStatusUpdate(BaseModel):
+    status: LinkStatus
+
+
+class GuardianLinkResponse(BaseModel):
+    id: int
+    guardian_id: int
+    patient_id: int
+    relation_type: str | None = None
+    status: LinkStatus
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
