@@ -19,6 +19,95 @@ st.set_page_config(
     layout="wide",
 )
 
+def apply_custom_styles() -> None:
+    """하늘색/흰색 기반의 전체 UI 스타일을 적용한다."""
+
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: linear-gradient(180deg, #f7fbff 0%, #eef8ff 100%);
+        }
+
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #dff1ff 0%, #edf8ff 100%);
+            border-right: 1px solid #cfe8f7;
+        }
+
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+
+        div[data-testid="stMetric"] {
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid #d9eefb;
+            border-radius: 18px;
+            padding: 16px;
+            box-shadow: 0 6px 20px rgba(126, 200, 245, 0.12);
+        }
+
+        div[data-testid="stForm"] {
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid #d9eefb;
+            border-radius: 18px;
+            padding: 20px;
+            box-shadow: 0 6px 20px rgba(126, 200, 245, 0.10);
+        }
+
+        div[data-testid="stDataFrame"] {
+            background: rgba(255, 255, 255, 0.90);
+            border-radius: 16px;
+            border: 1px solid #d9eefb;
+            padding: 8px;
+        }
+
+        .stButton > button {
+            background: linear-gradient(90deg, #7ec8f5 0%, #a8ddff 100%);
+            color: #1f3b52;
+            border: none;
+            border-radius: 999px;
+            font-weight: 600;
+            padding: 0.6rem 1rem;
+        }
+
+        .stButton > button:hover {
+            background: linear-gradient(90deg, #6ec0f1 0%, #95d5fb 100%);
+            color: #163246;
+        }
+
+        .stDownloadButton > button {
+            border-radius: 999px;
+        }
+
+        h1, h2, h3 {
+            color: #35627d;
+        }
+
+        .cloud-card {
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid #d9eefb;
+            border-radius: 22px;
+            padding: 20px;
+            box-shadow: 0 8px 24px rgba(126, 200, 245, 0.10);
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #35627d;
+            margin-bottom: 0.6rem;
+        }
+
+        .soft-caption {
+            color: #62839c;
+            font-size: 0.95rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 def initialize_session() -> None:
     """로그인 관련 세션 값을 초기화한다."""
@@ -378,7 +467,17 @@ def render_dashboard() -> None:
     }
 
     st.header("대시보드")
-
+    st.markdown(
+    """
+    <div class="cloud-card">
+        <div class="section-title">오늘의 건강 관리</div>
+        <div class="soft-caption">
+            나의 건강 기록을 확인하고, 통계와 주간 리포트를 한눈에 살펴보세요.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
     metric_columns = st.columns(3)
 
     metric_columns[0].metric(
@@ -611,9 +710,18 @@ def render_records() -> None:
         [],
     )
 
-    st.caption(
-        f"총 {len(records)}건"
+    st.markdown(
+        f"""
+        <div class="cloud-card">
+            <div class="section-title">조회 결과</div>
+            <div class="soft-caption">
+                총 {len(records)}개의 건강 기록이 조회되었습니다.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
+
     render_dataframe(records)
 
     if records:
@@ -668,7 +776,17 @@ def render_stats() -> None:
     """선택한 대상자의 평균 통계를 표시한다."""
 
     st.header("건강 통계")
-
+    st.markdown(
+    """
+    <div class="cloud-card">
+        <div class="section-title">건강 통계 요약</div>
+        <div class="soft-caption">
+            선택한 대상자의 평균 건강 지표를 한눈에 확인할 수 있어요.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
     patients = load_accessible_patients()
     selected_patient = select_patient(
         patients,
@@ -735,9 +853,21 @@ def render_stats() -> None:
 
 
 def render_weekly_report() -> None:
-    """대상자의 주간 건강 리포트를 표시한다."""
+    """대상자의 주간 건강 리포트를 보기 쉬운 카드 형태로 표시한다."""
 
     st.header("주간 리포트")
+
+    st.markdown(
+        """
+        <div class="cloud-card">
+            <div class="section-title">주간 건강 변화 요약</div>
+            <div class="soft-caption">
+                최근 7일과 직전 7일을 비교해 건강 상태 변화를 쉽게 확인할 수 있어요.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     patients = load_accessible_patients()
     selected_patient = select_patient(
@@ -773,7 +903,132 @@ def render_weekly_report() -> None:
             st.error(get_error_message(response))
             return
 
-        st.json(response.json())
+        report = response.json()
+
+        current_week = (
+            report.get("current_week")
+            or report.get("recent_week")
+            or report.get("current_period")
+            or {}
+        )
+        previous_week = (
+            report.get("previous_week")
+            or report.get("previous_period")
+            or {}
+        )
+        changes = report.get("changes") or {}
+        summary = report.get("summary") or report.get("comment") or ""
+
+        st.subheader("한눈에 보는 요약")
+
+        if summary:
+            st.markdown(
+                f"""
+                <div class="cloud-card">
+                    <div class="section-title">리포트 요약</div>
+                    <div class="soft-caption">{summary}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        metric_labels = {
+            "average_weight": "평균 체중",
+            "average_bmi": "평균 BMI",
+            "average_systolic": "평균 수축기 혈압",
+            "average_diastolic": "평균 이완기 혈압",
+            "average_blood_sugar": "평균 혈당",
+            "average_steps": "평균 걸음 수",
+            "average_sleep_hours": "평균 수면 시간",
+            "record_count": "기록 수",
+        }
+
+        st.subheader("최근 7일 주요 지표")
+
+        metric_keys = [
+            "record_count",
+            "average_weight",
+            "average_bmi",
+            "average_steps",
+            "average_sleep_hours",
+            "average_systolic",
+            "average_diastolic",
+            "average_blood_sugar",
+        ]
+
+        cols = st.columns(4)
+
+        for index, key in enumerate(metric_keys):
+            value = current_week.get(key)
+            delta = changes.get(key)
+
+            display_value = "-" if value is None else value
+            display_delta = None if delta is None else str(delta)
+
+            cols[index % 4].metric(
+                metric_labels.get(key, key),
+                display_value,
+                display_delta,
+            )
+
+        compare_col1, compare_col2 = st.columns(2)
+
+        with compare_col1:
+            st.markdown(
+                """
+                <div class="cloud-card">
+                    <div class="section-title">최근 7일</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if current_week:
+                current_df = pd.DataFrame(
+                    [
+                        {
+                            "항목": metric_labels.get(k, k),
+                            "값": v,
+                        }
+                        for k, v in current_week.items()
+                    ]
+                )
+                st.dataframe(
+                    current_df,
+                    width="stretch",
+                    hide_index=True,
+                )
+            else:
+                st.info("최근 7일 데이터가 없습니다.")
+
+        with compare_col2:
+            st.markdown(
+                """
+                <div class="cloud-card">
+                    <div class="section-title">직전 7일</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if previous_week:
+                previous_df = pd.DataFrame(
+                    [
+                        {
+                            "항목": metric_labels.get(k, k),
+                            "값": v,
+                        }
+                        for k, v in previous_week.items()
+                    ]
+                )
+                st.dataframe(
+                    previous_df,
+                    width="stretch",
+                    hide_index=True,
+                )
+            else:
+                st.info("직전 7일 데이터가 없습니다.")
+
+        with st.expander("원본 리포트 데이터 보기"):
+            st.json(report)
 
 
 def render_guardian_links() -> None:
@@ -962,16 +1217,11 @@ def render_admin_users() -> None:
         hide_index=True,
     )
 
-
 def render_application() -> None:
     """로그인 사용자의 역할에 맞는 화면을 구성한다."""
 
     user = st.session_state.current_user
     role = user["role"]
-
-    st.sidebar.title("My Health Log")
-    st.sidebar.write(f"**{user['name']}**")
-    st.sidebar.caption(user["email"])
 
     role_names = {
         "patient": "대상자",
@@ -979,8 +1229,38 @@ def render_application() -> None:
         "admin": "관리자",
     }
 
-    st.sidebar.caption(
-        f"역할: {role_names.get(role, role)}"
+    st.sidebar.markdown("## ☁️ My Health Log")
+
+    st.sidebar.markdown(
+        f"""
+        <div class="cloud-card">
+            <div
+                style="
+                    font-size: 1.05rem;
+                    font-weight: 700;
+                    color: #35627d;
+                    margin-bottom: 4px;
+                "
+            >
+                {user["name"]}
+            </div>
+
+            <div class="soft-caption">
+                {user["email"]}
+            </div>
+
+            <div
+                class="soft-caption"
+                style="
+                    margin-top: 10px;
+                    font-weight: 600;
+                "
+            >
+                역할: {role_names.get(role, role)}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     if st.sidebar.button(
@@ -989,39 +1269,29 @@ def render_application() -> None:
     ):
         logout()
 
-    menu_options = [
-        "대시보드",
-        "건강 기록 입력",
-        "기록 조회",
-        "통계",
-        "주간 리포트",
-        "보호자 연결 관리",
-    ]
+    st.sidebar.divider()
+
+    menu_functions = {
+        "☁️ 대시보드": render_dashboard,
+        "📝 건강 기록 입력": render_record_create,
+        "📋 기록 조회": render_records,
+        "📊 통계": render_stats,
+        "📅 주간 리포트": render_weekly_report,
+        "🔗 보호자 연결 관리": render_guardian_links,
+    }
 
     if role == "admin":
-        menu_options.append("사용자 관리")
+        menu_functions["👥 사용자 관리"] = render_admin_users
 
     selected_menu = st.sidebar.radio(
-        "메뉴",
-        menu_options,
+        "메뉴 선택",
+        list(menu_functions.keys()),
     )
 
-    if selected_menu == "대시보드":
-        render_dashboard()
-    elif selected_menu == "건강 기록 입력":
-        render_record_create()
-    elif selected_menu == "기록 조회":
-        render_records()
-    elif selected_menu == "통계":
-        render_stats()
-    elif selected_menu == "주간 리포트":
-        render_weekly_report()
-    elif selected_menu == "보호자 연결 관리":
-        render_guardian_links()
-    elif selected_menu == "사용자 관리":
-        render_admin_users()
+    selected_function = menu_functions[selected_menu]
+    selected_function()
 
-
+apply_custom_styles()
 initialize_session()
 
 if st.session_state.access_token:
