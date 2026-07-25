@@ -1,347 +1,390 @@
-# 마이 헬스 로그 API
+# ☁️ My Health Log
 
-> 사용자의 건강 기록을 저장하고, BMI·혈압·혈당·활동량을 자동 분석하여 건강 상태와 통계를 제공하는 REST API입니다.
+대상자, 보호자, 관리자가 역할별 권한에 따라 건강 기록을 입력하고 관리하는 웹 서비스입니다.
 
-## 1. 프로젝트 소개
-
-마이 헬스 로그 API는 사용자의 몸무게, 키, 혈압, 공복 혈당, 걸음 수, 수면 시간 등의 건강 기록을 PostgreSQL 데이터베이스에 저장하고 분석하는 FastAPI 기반 백엔드 프로젝트입니다.
-
-건강 기록을 등록하면 서버가 BMI, 혈압 상태, 혈당 상태, 걸음 수 등급과 경고 메시지를 자동으로 계산합니다. 또한 날짜 범위 검색, 평균 통계, 최근 7일과 직전 7일을 비교하는 주간 리포트를 제공합니다.
-
-> 본 프로젝트의 건강 분류 기준은 개발 학습을 위해 단순화한 기준이며 실제 의료 진단을 대신하지 않습니다.
+FastAPI와 PostgreSQL로 건강 기록 API를 구현하고, Streamlit으로 실제 사용자 화면을 구성했습니다. Docker Compose를 통해 로컬과 AWS Lightsail에서 동일한 구조로 실행할 수 있습니다.
 
 ---
 
-## 2. 주요 기능
+## 주요 기능
 
-- 사용자 생성 및 조회
-- 건강 기록 등록·조회·수정·삭제
+- JWT 기반 회원가입 및 로그인
+- 대상자·보호자·관리자 역할 분리
+- 건강 기록 생성·조회·수정·삭제
+- 보호자 연결 요청 및 대상자 승인
+- 역할 기반 건강 데이터 접근 제어
 - BMI 자동 계산 및 상태 분류
-- 혈압·공복 혈당 상태 분류
-- 건강 상태에 따른 경고 메시지 생성
-- 걸음 수 활동 등급 분류
-- 날짜 범위별 건강 기록 검색
-- 평균 체중, BMI, 혈압, 혈당, 걸음 수, 수면 시간 통계
+- 혈압·혈당 상태 자동 분류
+- 걸음 수 등급과 건강 경고 생성
+- 대상자별 평균 건강 통계
+- 최근 7일 건강 기록 추이 그래프
 - 최근 7일과 직전 7일 비교 리포트
-- PostgreSQL 데이터베이스 저장
-- Docker Volume을 통한 데이터 영구 보존
-- Docker Compose 기반 API·DB 통합 실행
+- 미래 날짜 입력 차단
+- 건강 수치 최소·최대 범위 검증
+- 하늘색·흰색 기반 Streamlit UI
+- Docker Compose 실행
+- AWS Lightsail 배포
 
 ---
 
-## 3. 기술 스택
+## 사용자 역할
 
-| 구분 | 기술 |
+| 역할 | 주요 기능 |
 |---|---|
-| API | FastAPI |
-| 서버 | Uvicorn |
-| 데이터 검증 | Pydantic |
-| ORM | SQLAlchemy 2.0 |
-| 데이터베이스 | PostgreSQL 17 |
-| DB 드라이버 | psycopg |
-| 컨테이너 | Docker, Docker Compose |
-| API 문서 | Swagger UI |
-| 배포 환경 | AWS Lightsail Ubuntu |
-| 원격 접속 | MobaXterm |
+| 대상자 | 본인 기록 관리, 보호자 연결 승인, 통계·그래프·리포트 확인 |
+| 보호자 | 대상자 연결 요청, 승인된 대상자의 기록 관리 |
+| 관리자 | 전체 사용자와 모든 대상자의 기록 조회 및 관리 |
 
 ---
 
-## 4. 시스템 구조
+## 기술 스택
 
-```text
-사용자 또는 외부 프로그램
-          │
-          │ HTTP 요청
-          ▼
-FastAPI API 서버
-          │
-          ├─ Pydantic 입력 검증
-          ├─ BMI 및 건강 상태 계산
-          └─ JSON 응답
-          │
-          ▼
-SQLAlchemy ORM
-          │
-          ▼
-PostgreSQL 데이터베이스
-          │
-          ▼
-Docker Volume 데이터 영구 저장
-```
+### Backend
 
-Docker 실행 시 외부 `9090` 포트가 FastAPI 컨테이너의 `8000` 포트에 연결됩니다.
+- Python
+- FastAPI
+- Pydantic
+- SQLAlchemy
+- JWT
+- pwdlib
+- PyJWT
 
-```text
-localhost:9090 → FastAPI container:8000
-FastAPI container → PostgreSQL container:5432
-```
+### Frontend
 
----
+- Streamlit
+- Requests
+- Pandas
 
-## 5. ERD
+### Database
 
-```mermaid
-erDiagram
-    USERS ||--o{ HEALTH_RECORDS : has
+- PostgreSQL 17
 
-    USERS {
-        int id PK
-        varchar name
-        datetime created_at
-    }
+### Infrastructure
 
-    HEALTH_RECORDS {
-        int id PK
-        int user_id FK
-        date date
-        float weight
-        float height
-        int systolic
-        int diastolic
-        int blood_sugar
-        int steps
-        varchar step_grade
-        float sleep_hours
-        text memo
-        float bmi
-        varchar bmi_category
-        varchar bp_category
-        varchar sugar_category
-        json warnings
-        datetime created_at
-        datetime updated_at
-    }
-```
-
-- 한 명의 사용자는 여러 건강 기록을 가질 수 있습니다.
-- `health_records.user_id`는 `users.id`를 참조합니다.
-- 사용자를 삭제하면 해당 사용자의 건강 기록도 함께 삭제됩니다.
-- 주간 리포트는 별도 테이블에 저장하지 않고 건강 기록을 조회해 계산합니다.
-
----
-
-## 6. API 엔드포인트
-
-### 기본 및 상태 확인
-
-| 메서드 | 경로 | 기능 |
-|---|---|---|
-| GET | `/` | API 기본 정보 |
-| GET | `/health` | API 및 DB 연결 상태 확인 |
-
-### 사용자
-
-| 메서드 | 경로 | 기능 |
-|---|---|---|
-| POST | `/users` | 사용자 생성 |
-| GET | `/users` | 전체 사용자 조회 |
-
-### 건강 기록
-
-| 메서드 | 경로 | 기능 |
-|---|---|---|
-| POST | `/records` | 건강 기록 저장 및 자동 분석 |
-| GET | `/records` | 전체 또는 사용자별 기록 조회 |
-| GET | `/records/{record_id}` | 건강 기록 단건 조회 |
-| PUT | `/records/{record_id}` | 건강 기록 수정 및 재분석 |
-| DELETE | `/records/{record_id}` | 건강 기록 삭제 |
-
-### 검색·통계·리포트
-
-| 메서드 | 경로 | 기능 |
-|---|---|---|
-| GET | `/search` | 날짜 범위별 기록 검색 |
-| GET | `/stats` | 건강 기록 평균 통계 |
-| GET | `/weekly-report` | 최근 7일과 직전 7일 비교 |
-
-API 실행 후 Swagger UI에서 모든 기능을 테스트할 수 있습니다.
-
-```text
-http://localhost:9090/docs
-```
-
----
-
-## 7. 건강 분류 기준
-
-### BMI
-
-| BMI | 분류 |
-|---:|---|
-| 18.5 미만 | 저체중 |
-| 18.5 이상 23 미만 | 정상 |
-| 23 이상 25 미만 | 과체중 |
-| 25 이상 | 비만 |
-
-### 혈압
-
-| 기준 | 분류 |
-|---|---|
-| 수축기 120 미만이고 이완기 80 미만 | 정상 |
-| 수축기 120~139 또는 이완기 80~89 | 주의 |
-| 수축기 140 이상 또는 이완기 90 이상 | 고혈압 |
-
-### 공복 혈당
-
-| 공복 혈당 | 분류 |
-|---:|---|
-| 100 미만 | 정상 |
-| 100~125 | 공복혈당장애 |
-| 126 이상 | 당뇨 의심 |
-
-### 걸음 수
-
-| 걸음 수 | 활동 등급 |
-|---:|---|
-| 5,000보 미만 | 부족 |
-| 5,000보 이상 10,000보 미만 | 적정 |
-| 10,000보 이상 | 우수 |
-
-걸음 수 분류는 프로젝트에서 단순화하여 정의한 기준입니다.
-
----
-
-## 8. 로컬 Docker 실행 방법
-
-### 사전 요구사항
-
-- Git
-- Docker Desktop
+- Docker
 - Docker Compose
+- AWS Lightsail
 
-### 저장소 복제
+---
+
+## 시스템 구성
+
+```text
+사용자 브라우저
+      │
+      ▼
+Streamlit Frontend :8501
+      │
+      ▼
+FastAPI Backend :8000
+      │
+      ▼
+PostgreSQL Database :5432
+```
+
+외부에서는 FastAPI를 호스트의 9090번 포트로 공개합니다.
+
+---
+
+## 프로젝트 구조
+
+```text
+my-health-log-api
+├─ app
+│  ├─ create_admin.py
+│  ├─ crud.py
+│  ├─ database.py
+│  ├─ health_service.py
+│  ├─ main.py
+│  ├─ models.py
+│  ├─ schemas.py
+│  └─ security.py
+│
+├─ frontend
+│  ├─ .streamlit
+│  │  └─ config.toml
+│  ├─ app.py
+│  ├─ Dockerfile
+│  └─ requirements.txt
+│
+├─ docs
+│  ├─ erd.md
+│  └─ prd.md
+│
+├─ docker-compose.yml
+├─ Dockerfile
+├─ README.md
+└─ requirements.txt
+```
+
+---
+
+## 데이터베이스
+
+핵심 테이블은 다음 세 개입니다.
+
+- `users`: 대상자, 보호자, 관리자 계정
+- `guardian_patient_links`: 보호자와 대상자의 연결 관계
+- `health_records`: 건강 측정값과 자동 분석 결과
+
+자세한 내용은 [`docs/erd.md`](docs/erd.md)를 참고합니다.
+
+---
+
+## 입력값 검증
+
+| 항목 | 허용 범위 |
+|---|---:|
+| 기록 날짜 | 오늘 또는 과거 |
+| 체중 | 20~300kg |
+| 키 | 50~250cm |
+| 수축기 혈압 | 60~250 |
+| 이완기 혈압 | 30~150 |
+| 공복 혈당 | 40~500mg/dL |
+| 걸음 수 | 0~100,000 |
+| 수면 시간 | 0~24시간 |
+| 메모 | 최대 500자 |
+
+수축기 혈압은 이완기 혈압보다 높아야 합니다.
+
+입력값은 Streamlit에서 1차 검증하고 FastAPI에서 2차 검증합니다. 범위를 벗어난 데이터는 데이터베이스에 저장되지 않습니다.
+
+---
+
+## 주요 API
+
+| Method | Endpoint | 설명 |
+|---|---|---|
+| POST | `/auth/register` | 회원가입 |
+| POST | `/auth/login` | 로그인 |
+| GET | `/users/me` | 현재 사용자 정보 |
+| GET | `/users` | 전체 사용자 조회 |
+| GET | `/users/accessible-patients` | 접근 가능한 대상자 목록 |
+| POST | `/records` | 건강 기록 생성 |
+| GET | `/records` | 건강 기록 목록 조회 |
+| GET | `/records/{record_id}` | 건강 기록 단건 조회 |
+| PUT | `/records/{record_id}` | 건강 기록 수정 |
+| DELETE | `/records/{record_id}` | 건강 기록 삭제 |
+| GET | `/search` | 기간별 기록 검색 |
+| GET | `/stats` | 건강 통계 조회 |
+| GET | `/weekly-report` | 주간 리포트 조회 |
+| POST | `/guardian-links` | 보호자 연결 요청 |
+| GET | `/guardian-links` | 연결 요청 목록 조회 |
+| PATCH | `/guardian-links/{link_id}/status` | 연결 승인·거절 |
+
+전체 API는 Swagger에서 확인할 수 있습니다.
+
+---
+
+## 환경변수
+
+루트 경로에 `.env` 파일을 생성합니다.
+
+```env
+POSTGRES_DB=health_log_db
+POSTGRES_USER=health_user
+POSTGRES_PASSWORD=change_this_password
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+
+JWT_SECRET_KEY=change_this_to_a_long_random_secret
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+```
+
+실제 비밀번호와 JWT 비밀키가 포함된 `.env`는 Git에 업로드하지 않습니다. 저장소에는 예시값만 포함한 `.env.example`을 둡니다.
+
+---
+
+## 로컬 실행
+
+### 1. 저장소 복제
 
 ```bash
-git clone <GitHub 저장소 URL>
+git clone https://github.com/i-dab-i/my-health-log-api.git
 cd my-health-log-api
 ```
 
-### 환경변수 생성
+### 2. 환경변수 설정
 
-`.env.example`을 복사하여 `.env` 파일을 만듭니다.
+`.env.example`을 참고해 `.env`를 작성합니다.
 
-Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Linux 또는 macOS:
-
-```bash
-cp .env.example .env
-```
-
-`.env`의 DB 비밀번호를 원하는 값으로 변경합니다.
-
-### 컨테이너 실행
+### 3. 전체 서비스 실행
 
 ```bash
 docker compose up -d --build
 ```
 
-### 실행 상태 확인
+### 4. 상태 확인
 
 ```bash
 docker compose ps
 ```
 
-### API 접속
+정상 실행 시 다음 세 컨테이너가 표시됩니다.
 
 ```text
-http://localhost:9090/docs
+health-log-db
+health-log-api
+health-log-frontend
 ```
 
-### 로그 확인
+---
+
+## 로컬 접속 주소
+
+| 서비스 | 주소 |
+|---|---|
+| Streamlit 사용자 화면 | http://localhost:8501 |
+| FastAPI Swagger | http://localhost:9090/docs |
+| OpenAPI JSON | http://localhost:9090/openapi.json |
+
+---
+
+## 관리자 계정 생성
+
+관리자 계정은 일반 회원가입 화면에서 생성하지 않습니다.
 
 ```bash
-docker compose logs -f api
+docker compose exec api python -m app.create_admin
 ```
 
-### 컨테이너 종료
+실행 후 관리자 이메일, 이름, 비밀번호를 입력합니다. 비밀번호 입력 시 터미널에 문자가 표시되지 않는 것이 정상입니다.
+
+---
+
+## 보호자 연결 절차
+
+```text
+1. 대상자가 회원가입한다.
+2. 대상자 대시보드에서 연결 코드를 확인한다.
+3. 보호자에게 연결 코드를 전달한다.
+4. 보호자가 대상자 코드로 연결을 요청한다.
+5. 대상자가 요청을 승인한다.
+6. 보호자가 대상자의 건강 기록에 접근한다.
+```
+
+연결 상태가 `approved`가 되기 전에는 보호자가 대상자의 건강 기록에 접근할 수 없습니다.
+
+---
+
+## 역할별 접근 권한
+
+| 기능 | 대상자 | 보호자 | 관리자 |
+|---|---|---|---|
+| 본인 기록 조회 | 가능 | - | 가능 |
+| 승인 대상자 기록 조회 | 불가 | 가능 | 가능 |
+| 건강 기록 입력 | 본인 | 승인 대상자 | 모든 대상자 |
+| 건강 기록 수정·삭제 | 본인 | 승인 대상자 | 모든 대상자 |
+| 보호자 연결 요청 | 불가 | 가능 | 불가 |
+| 연결 승인·거절 | 가능 | 불가 | 가능 |
+| 전체 사용자 조회 | 불가 | 불가 | 가능 |
+| 통계 및 리포트 | 본인 | 승인 대상자 | 모든 대상자 |
+
+---
+
+## AWS 배포
+
+### 배포 주소
+
+| 서비스 | 주소 |
+|---|---|
+| Streamlit 사용자 화면 | http://13.124.215.0:8501 |
+| FastAPI Swagger | http://13.124.215.0:9090/docs |
+
+### 서버 코드 업데이트
 
 ```bash
-docker compose down
+cd ~/my-health-log-api
+git pull origin main
+docker compose up -d --build api frontend
 ```
 
-`docker compose down -v`를 실행하면 PostgreSQL 데이터 Volume까지 삭제되므로 주의해야 합니다.
+일반 업데이트 과정에서는 PostgreSQL 데이터를 유지하기 위해 `docker compose down -v`를 사용하지 않습니다.
 
 ---
 
-## 9. 로컬 Python 실행 방법
+## 코드 검사
 
-PostgreSQL 컨테이너만 실행합니다.
+### 백엔드
 
 ```bash
-docker compose up -d db
+python -m compileall app
 ```
 
-가상환경을 생성하고 활성화합니다.
+### 프런트엔드
 
-Windows PowerShell:
-
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
+```bash
+python -m py_compile frontend/app.py
 ```
 
-패키지를 설치합니다.
+### Docker Compose
 
-```powershell
-pip install -r requirements.txt
-```
-
-서버를 실행합니다.
-
-```powershell
-python -m uvicorn app.main:app --reload
-```
-
-접속 주소:
-
-```text
-http://127.0.0.1:8000/docs
+```bash
+docker compose config
 ```
 
 ---
 
-## 10. 프로젝트 구조
+## 테스트 항목
 
-```text
-my-health-log-api/
-├─ app/
-│  ├─ __init__.py
-│  ├─ main.py
-│  ├─ database.py
-│  ├─ models.py
-│  ├─ schemas.py
-│  ├─ crud.py
-│  └─ health_service.py
-├─ docs/
-│  └─ erd.md
-├─ tests/
-├─ Dockerfile
-├─ docker-compose.yml
-├─ requirements.txt
-├─ .env.example
-├─ .gitignore
-├─ .dockerignore
-└─ README.md
-```
+- 대상자·보호자 회원가입 및 로그인
+- 관리자 로그인
+- 건강 기록 생성·조회·수정·삭제
+- 미래 날짜 저장 차단
+- 건강 수치 범위 초과 저장 차단
+- 수축기·이완기 혈압 관계 검증
+- 보호자 연결 요청 및 승인
+- 승인되지 않은 대상자의 기록 접근 차단
+- 대상자별 통계 조회
+- 최근 7일 그래프 표시
+- 주간 비교 리포트 표시
+- 관리자 전체 사용자 목록 조회
+- AWS 배포 주소 접속
 
 ---
 
-## 11. 배포 주소
+## 화면 디자인
 
-AWS Lightsail 배포 완료 후 아래 주소를 기재합니다.
-
-```text
-http://<Lightsail 공인 IP>:9090/docs
-```
+- 하늘색과 흰색 기반 클라우드 테마
+- 역할별 사이드바 메뉴
+- 선택된 메뉴 색상 강조
+- 카드형 건강 통계
+- 건강 기록 표
+- 최근 7일 추이 그래프
+- 사용자용 주간 비교 리포트
+- 입력값 오류 메시지 표시
 
 ---
 
-## 12. 개발자
+## 문서
 
-- 이름: 은다빈
-- 프로젝트 형태: 개인 미니 프로젝트
+- [PRD](docs/prd.md)
+- [ERD](docs/erd.md)
+- [Swagger API 문서](http://13.124.215.0:9090/docs)
+
+---
+
+## 실행 화면
+
+대상자 건강 기록
+
+![대상자 건강 기록](docs/images/01-patient-log.png)
+
+최근 7일 건강 추이 및 리포트
+
+![최근 7일 건강 추이](docs/images/02-patient-7days-report.png)
+
+보호자 연결 관리
+
+![보호자 연결 관리](docs/images/03-guardian-link.png)
+
+---
+
+## 보안 주의 사항
+
+- `.env` 파일을 Git에 업로드하지 않습니다.
+- JWT 비밀키를 README나 화면 캡처에 공개하지 않습니다.
+- 실제 DB 비밀번호를 저장소에 작성하지 않습니다.
+- 액세스 토큰을 외부에 공유하지 않습니다.
+- 운영 환경에서는 HTTPS와 도메인 적용을 권장합니다.
