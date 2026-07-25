@@ -104,6 +104,106 @@ def apply_custom_styles() -> None:
             color: #62839c;
             font-size: 0.95rem;
         }
+        /* 사이드바 메뉴 버튼 공통 */
+section[data-testid="stSidebar"]
+div[data-testid="stButton"] > button {
+    width: 100%;
+    justify-content: flex-start;
+    border-radius: 13px;
+    padding: 0.62rem 0.85rem;
+    margin-bottom: 0.15rem;
+    border: 1px solid transparent;
+    box-shadow: none;
+    font-weight: 600;
+    transition: all 0.18s ease;
+}
+
+/* 선택되지 않은 메뉴 */
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-secondary"] {
+    background: transparent !important;
+    color: #41677f !important;
+    border-color: transparent !important;
+}
+
+/* 선택되지 않은 메뉴에 마우스를 올렸을 때 */
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-secondary"]:hover {
+    background: #d8efff !important;
+    color: #27536d !important;
+    border-color: #b8dff7 !important;
+    transform: translateX(3px);
+}
+
+/* 현재 선택된 메뉴 */
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-primary"] {
+    background: linear-gradient(
+        90deg,
+        #72c1f1 0%,
+        #9bd9fb 100%
+    ) !important;
+    color: #ffffff !important;
+    border-color: #72c1f1 !important;
+    box-shadow: 0 5px 14px rgba(87, 169, 219, 0.22);
+}
+
+/* 선택된 메뉴에 마우스를 올렸을 때 */
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-primary"]:hover {
+    background: linear-gradient(
+        90deg,
+        #62b8eb 0%,
+        #89d0f8 100%
+    ) !important;
+    color: #ffffff !important;
+    transform: translateX(2px);
+}
+
+/* 사이드바 사용자 카드 */
+.sidebar-profile-card {
+    padding: 18px !important;
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+
+.sidebar-profile-name {
+    color: #315f7b;
+    font-size: 1.08rem;
+    font-weight: 700;
+    margin-bottom: 7px;
+}
+
+.sidebar-profile-email {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.sidebar-profile-role {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #d9eefb;
+    font-weight: 600;
+}
+
+/* 사이드바 메뉴 버튼 글자 크기 */
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-primary"] p,
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-secondary"] p {
+    font-size: 1.05rem !important;
+    line-height: 1.4 !important;
+    font-weight: 600 !important;
+}
+
+/* 메뉴 버튼 높이와 여백 */
+section[data-testid="stSidebar"]
+div[data-testid="stButton"] > button {
+    min-height: 46px;
+    padding: 0.7rem 0.9rem !important;
+}
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -437,6 +537,148 @@ def render_dataframe(
         hide_index=True,
     )
 
+def render_seven_day_trends(
+    records: list[dict[str, Any]],
+) -> None:
+    """최근 7일 건강 기록을 항목별 그래프로 표시한다."""
+
+    st.subheader("최근 7일 건강 추이")
+
+    if not records:
+        st.info("최근 7일간 등록된 건강 기록이 없습니다.")
+        return
+
+    dataframe = pd.DataFrame(records)
+
+    if "date" not in dataframe.columns:
+        st.info("건강 기록에 날짜 정보가 없습니다.")
+        return
+
+    dataframe["date"] = pd.to_datetime(
+        dataframe["date"],
+        errors="coerce",
+    )
+
+    dataframe = dataframe.dropna(
+        subset=["date"],
+    )
+
+    today = pd.Timestamp(date.today())
+    seven_days_ago = today - pd.Timedelta(days=6)
+
+    recent_data = dataframe[
+        (dataframe["date"] >= seven_days_ago)
+        & (dataframe["date"] <= today)
+    ].copy()
+
+    if recent_data.empty:
+        st.info("최근 7일간 등록된 건강 기록이 없습니다.")
+        return
+
+    recent_data = (
+        recent_data
+        .sort_values("date")
+        .groupby("date", as_index=False)
+        .agg(
+            {
+                "weight": "mean",
+                "bmi": "mean",
+                "systolic": "mean",
+                "diastolic": "mean",
+                "blood_sugar": "mean",
+                "steps": "mean",
+                "sleep_hours": "mean",
+            }
+        )
+    )
+
+    recent_data["날짜"] = recent_data[
+        "date"
+    ].dt.strftime("%m/%d")
+
+    recent_data = recent_data.set_index("날짜")
+
+    if len(recent_data) == 1:
+        st.info(
+            "최근 7일 기록이 1건이므로 선 대신 "
+            "단일 막대로 표시합니다."
+        )
+
+    def show_chart(
+        chart_data: pd.DataFrame,
+    ) -> None:
+        if len(chart_data) == 1:
+            st.bar_chart(chart_data)
+        else:
+            st.line_chart(chart_data)
+
+    tabs = st.tabs(
+        [
+            "체중·BMI",
+            "혈압",
+            "혈당",
+            "걸음 수",
+            "수면",
+        ]
+    )
+
+    with tabs[0]:
+        show_chart(
+            recent_data[
+                ["weight", "bmi"]
+            ].rename(
+                columns={
+                    "weight": "체중(kg)",
+                    "bmi": "BMI",
+                }
+            )
+        )
+
+    with tabs[1]:
+        show_chart(
+            recent_data[
+                ["systolic", "diastolic"]
+            ].rename(
+                columns={
+                    "systolic": "수축기 혈압",
+                    "diastolic": "이완기 혈압",
+                }
+            )
+        )
+
+    with tabs[2]:
+        show_chart(
+            recent_data[
+                ["blood_sugar"]
+            ].rename(
+                columns={
+                    "blood_sugar": "혈당",
+                }
+            )
+        )
+
+    with tabs[3]:
+        show_chart(
+            recent_data[
+                ["steps"]
+            ].rename(
+                columns={
+                    "steps": "걸음 수",
+                }
+            )
+        )
+
+    with tabs[4]:
+        show_chart(
+            recent_data[
+                ["sleep_hours"]
+            ].rename(
+                columns={
+                    "sleep_hours": "수면 시간",
+                }
+            )
+        )
+
 
 def render_dashboard() -> None:
     """로그인 사용자의 건강 기록 요약을 표시한다."""
@@ -511,6 +753,67 @@ def render_dashboard() -> None:
         records[:10]
     )
 
+def validate_health_record_input(
+    *,
+    record_date: date,
+    weight: float,
+    height: float,
+    systolic: int,
+    diastolic: int,
+    blood_sugar: int,
+    steps: int,
+    sleep_hours: float,
+) -> list[str]:
+    """건강 기록 입력값의 허용 범위를 검사한다."""
+
+    errors: list[str] = []
+
+    if record_date > date.today():
+        errors.append(
+            "기록 날짜는 오늘 이후일 수 없습니다."
+        )
+
+    if not 20 <= weight <= 300:
+        errors.append(
+            "체중은 20kg 이상 300kg 이하여야 합니다."
+        )
+
+    if not 50 <= height <= 250:
+        errors.append(
+            "키는 50cm 이상 250cm 이하여야 합니다."
+        )
+
+    if not 60 <= systolic <= 250:
+        errors.append(
+            "수축기 혈압은 60 이상 250 이하여야 합니다."
+        )
+
+    if not 30 <= diastolic <= 150:
+        errors.append(
+            "이완기 혈압은 30 이상 150 이하여야 합니다."
+        )
+
+    if systolic <= diastolic:
+        errors.append(
+            "수축기 혈압은 이완기 혈압보다 높아야 합니다."
+        )
+
+    if not 40 <= blood_sugar <= 500:
+        errors.append(
+            "혈당은 40 이상 500 이하여야 합니다."
+        )
+
+    if not 0 <= steps <= 100000:
+        errors.append(
+            "걸음 수는 0 이상 100,000 이하여야 합니다."
+        )
+
+    if not 0 <= sleep_hours <= 24:
+        errors.append(
+            "수면 시간은 0시간 이상 24시간 이하여야 합니다."
+        )
+
+    return errors
 
 def render_record_create() -> None:
     """건강 기록 입력 화면을 표시한다."""
@@ -530,6 +833,7 @@ def render_record_create() -> None:
         record_date = st.date_input(
             "기록 날짜",
             value=date.today(),
+            max_value=date.today(),
         )
 
         first_row = st.columns(2)
@@ -601,6 +905,23 @@ def render_record_create() -> None:
         )
 
     if submitted:
+        validation_errors = validate_health_record_input(
+            record_date=record_date,
+            weight=weight,
+            height=height,
+            systolic=systolic,
+            diastolic=diastolic,
+            blood_sugar=blood_sugar,
+            steps=steps,
+            sleep_hours=sleep_hours,
+        )
+
+        if validation_errors:
+            for error_message in validation_errors:
+                st.error(error_message)
+
+            return
+
         payload = {
             "user_id": selected_patient["id"],
             "date": record_date.isoformat(),
@@ -634,11 +955,13 @@ def render_record_create() -> None:
             f"기록 ID: {created_record['id']}"
         )
 
-        warnings = created_record.get("warnings", [])
+        warnings = created_record.get(
+            "warnings",
+            [],
+        )
 
-        if warnings:
-            for warning in warnings:
-                st.warning(warning)
+        for warning in warnings:
+            st.warning(warning)
 
 
 def render_records() -> None:
@@ -675,6 +998,7 @@ def render_records() -> None:
         end_date = date_columns[1].date_input(
             "종료일",
             value=date.today(),
+            max_value=date.today(),
             key="search_end",
         )
 
@@ -723,6 +1047,8 @@ def render_records() -> None:
     )
 
     render_dataframe(records)
+    render_dataframe(records)
+    render_seven_day_trends(records)
 
     if records:
         st.divider()
@@ -773,20 +1099,23 @@ def render_records() -> None:
 
 
 def render_stats() -> None:
-    """선택한 대상자의 평균 통계를 표시한다."""
+    """선택한 대상자의 통계와 최근 7일 추이를 표시한다."""
 
     st.header("건강 통계")
+
     st.markdown(
-    """
-    <div class="cloud-card">
-        <div class="section-title">건강 통계 요약</div>
-        <div class="soft-caption">
-            선택한 대상자의 평균 건강 지표를 한눈에 확인할 수 있어요.
+        """
+        <div class="cloud-card">
+            <div class="section-title">건강 통계 요약</div>
+            <div class="soft-caption">
+                선택한 대상자의 평균 건강 지표와
+                최근 7일간의 변화를 확인할 수 있어요.
+            </div>
         </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+        """,
+        unsafe_allow_html=True,
+    )
+
     patients = load_accessible_patients()
     selected_patient = select_patient(
         patients,
@@ -796,7 +1125,7 @@ def render_stats() -> None:
     if selected_patient is None:
         return
 
-    response = api_request(
+    stats_response = api_request(
         "GET",
         "/stats",
         params={
@@ -804,53 +1133,88 @@ def render_stats() -> None:
         },
     )
 
-    if response is None:
+    if stats_response is None:
         return
 
-    if not response.ok:
-        st.error(get_error_message(response))
+    if not stats_response.ok:
+        st.error(
+            get_error_message(stats_response)
+        )
         return
 
-    stats = response.json()
+    stats = stats_response.json()
 
-    first_row = st.columns(4)
+    first_row = st.columns(3)
 
     first_row[0].metric(
         "기록 수",
         stats.get("record_count", 0),
     )
     first_row[1].metric(
-        "평균 체중",
-        stats.get("average_weight") or "-",
+        "평균 BMI",
+        stats.get("average_bmi")
+        if stats.get("average_bmi") is not None
+        else "-",
     )
     first_row[2].metric(
-        "평균 BMI",
-        stats.get("average_bmi") or "-",
-    )
-    first_row[3].metric(
         "평균 걸음 수",
-        stats.get("average_steps") or "-",
+        stats.get("average_steps")
+        if stats.get("average_steps") is not None
+        else "-",
     )
 
     second_row = st.columns(4)
 
     second_row[0].metric(
         "평균 수축기 혈압",
-        stats.get("average_systolic") or "-",
+        stats.get("average_systolic")
+        if stats.get("average_systolic") is not None
+        else "-",
     )
     second_row[1].metric(
         "평균 이완기 혈압",
-        stats.get("average_diastolic") or "-",
+        stats.get("average_diastolic")
+        if stats.get("average_diastolic") is not None
+        else "-",
     )
     second_row[2].metric(
         "평균 혈당",
-        stats.get("average_blood_sugar") or "-",
+        stats.get("average_blood_sugar")
+        if stats.get("average_blood_sugar") is not None
+        else "-",
     )
     second_row[3].metric(
         "평균 수면 시간",
-        stats.get("average_sleep_hours") or "-",
+        stats.get("average_sleep_hours")
+        if stats.get("average_sleep_hours") is not None
+        else "-",
     )
 
+    st.divider()
+
+    records_response = api_request(
+        "GET",
+        "/records",
+        params={
+            "user_id": selected_patient["id"],
+        },
+    )
+
+    if records_response is None:
+        return
+
+    if not records_response.ok:
+        st.error(
+            get_error_message(records_response)
+        )
+        return
+
+    records = records_response.json().get(
+        "records",
+        [],
+    )
+
+    render_seven_day_trends(records)
 
 def render_weekly_report() -> None:
     """대상자의 주간 건강 리포트를 보기 쉬운 카드 형태로 표시한다."""
@@ -881,6 +1245,7 @@ def render_weekly_report() -> None:
     report_end_date = st.date_input(
         "리포트 종료일",
         value=date.today(),
+        max_value=date.today(),
     )
 
     if st.button(
@@ -1231,51 +1596,28 @@ def render_application() -> None:
 
     st.sidebar.markdown("## ☁️ My Health Log")
 
-    st.sidebar.markdown(
-        f"""
-        <div class="cloud-card">
-            <div
-                style="
-                    font-size: 1.05rem;
-                    font-weight: 700;
-                    color: #35627d;
-                    margin-bottom: 4px;
-                "
-            >
-                {user["name"]}
-            </div>
-
-            <div class="soft-caption">
-                {user["email"]}
-            </div>
-
-            <div
-                class="soft-caption"
-                style="
-                    margin-top: 10px;
-                    font-weight: 600;
-                "
-            >
-                역할: {role_names.get(role, role)}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    with st.sidebar.container(border=True):
+        st.markdown(f"### {user['name']}")
+        st.caption(user["email"])
+        st.markdown(
+            f"**역할:** {role_names.get(role, role)}"
+        )
 
     if st.sidebar.button(
         "로그아웃",
+        key="logout_button",
         use_container_width=True,
     ):
         logout()
 
     st.sidebar.divider()
+    st.sidebar.markdown("### 메뉴")
 
     menu_functions = {
         "☁️ 대시보드": render_dashboard,
         "📝 건강 기록 입력": render_record_create,
         "📋 기록 조회": render_records,
-        "📊 통계": render_stats,
+        "📊 건강 통계": render_stats,
         "📅 주간 리포트": render_weekly_report,
         "🔗 보호자 연결 관리": render_guardian_links,
     }
@@ -1283,9 +1625,32 @@ def render_application() -> None:
     if role == "admin":
         menu_functions["👥 사용자 관리"] = render_admin_users
 
-    selected_menu = st.sidebar.radio(
-        "메뉴 선택",
-        list(menu_functions.keys()),
+    menu_names = list(menu_functions.keys())
+
+    selected_menu = st.session_state.get(
+        "selected_sidebar_menu",
+        menu_names[0],
+    )
+
+    if selected_menu not in menu_functions:
+        selected_menu = menu_names[0]
+        st.session_state["selected_sidebar_menu"] = selected_menu
+
+    for index, menu_name in enumerate(menu_names):
+        is_selected = selected_menu == menu_name
+
+        if st.sidebar.button(
+            menu_name,
+            key=f"sidebar_menu_{index}",
+            type="primary" if is_selected else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state["selected_sidebar_menu"] = menu_name
+            st.rerun()
+
+    selected_menu = st.session_state.get(
+        "selected_sidebar_menu",
+        menu_names[0],
     )
 
     selected_function = menu_functions[selected_menu]

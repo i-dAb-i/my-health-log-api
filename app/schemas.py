@@ -1,6 +1,6 @@
 from datetime import date as DateType, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.models import LinkStatus, UserRole
 
@@ -55,112 +55,74 @@ class TokenResponse(BaseModel):
 # ─────────────────────────────────────────
 # 건강 기록 공통 입력 스키마
 # ─────────────────────────────────────────
-
 class HealthRecordBase(BaseModel):
     date: DateType
 
     weight: float = Field(
         ge=20,
         le=300,
-        description="체중(kg): 20~300",
+        description="체중(kg), 허용 범위 20~300",
     )
-
     height: float = Field(
         ge=50,
         le=250,
-        description="키(cm): 50~250",
+        description="키(cm), 허용 범위 50~250",
     )
-
     systolic: int = Field(
         ge=60,
         le=250,
-        description="수축기 혈압: 60~250",
+        description="수축기 혈압, 허용 범위 60~250",
     )
-
     diastolic: int = Field(
         ge=30,
         le=150,
-        description="이완기 혈압: 30~150",
+        description="이완기 혈압, 허용 범위 30~150",
     )
-
     blood_sugar: int = Field(
         ge=40,
         le=500,
-        description="공복 혈당: 40~500",
+        description="혈당, 허용 범위 40~500",
     )
-
     steps: int = Field(
         ge=0,
         le=100000,
-        description="걸음 수: 0~100000",
+        description="걸음 수, 허용 범위 0~100000",
     )
-
     sleep_hours: float = Field(
         ge=0,
         le=24,
-        description="수면 시간: 0~24",
+        description="수면 시간, 허용 범위 0~24",
     )
-
     memo: str | None = Field(
         default=None,
         max_length=500,
     )
-    date: DateType = Field(
-        description="건강 측정일",
-        examples=["2026-07-21"],
-    )
 
-    weight: float = Field(
-        gt=0,
-        description="몸무게(kg)",
-        examples=[60.5],
-    )
+    @field_validator("date")
+    @classmethod
+    def validate_record_date(
+        cls,
+        value: DateType,
+    ) -> DateType:
+        """미래 날짜의 건강 기록 생성을 막는다."""
 
-    height: float = Field(
-        gt=0,
-        description="키(cm)",
-        examples=[165.0],
-    )
+        if value > DateType.today():
+            raise ValueError(
+                "기록 날짜는 오늘 이후일 수 없습니다."
+            )
 
-    systolic: int = Field(
-        gt=0,
-        description="수축기 혈압",
-        examples=[120],
-    )
+        return value
 
-    diastolic: int = Field(
-        gt=0,
-        description="이완기 혈압",
-        examples=[80],
-    )
+    @model_validator(mode="after")
+    def validate_blood_pressure(self):
+        """수축기 혈압이 이완기 혈압보다 높아야 한다."""
 
-    blood_sugar: int = Field(
-        gt=0,
-        description="공복 혈당(mg/dL)",
-        examples=[95],
-    )
+        if self.systolic <= self.diastolic:
+            raise ValueError(
+                "수축기 혈압은 이완기 혈압보다 높아야 합니다."
+            )
 
-    steps: int = Field(
-        default=0,
-        ge=0,
-        description="하루 걸음 수",
-        examples=[8000],
-    )
-
-    sleep_hours: float = Field(
-        default=0.0,
-        ge=0,
-        le=24,
-        description="수면 시간",
-        examples=[7.5],
-    )
-
-    memo: str = Field(
-        default="",
-        max_length=500,
-        description="건강 기록 메모",
-        examples=["아침 식사 전에 측정"],
-    )
+        return self
 
 
 # 건강 기록 생성 요청
