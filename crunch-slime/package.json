@@ -1,0 +1,11 @@
+{
+  "name": "crunch-slime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "배경 투명 PNG를 말랑거리고 소리 나는 크런치 슬라임으로 만드는 웹 앱",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "python3 -m http.server 8899"
+  }
+}

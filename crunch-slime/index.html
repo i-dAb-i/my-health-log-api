@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>크런치 슬라임 메이커</title>
+<meta name="description" content="배경이 투명한 PNG를 올리면 누르면 말랑거리고 소리 나는 크런치 슬라임이 됩니다.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff6fae'/%3E%3Cstop offset='1' stop-color='%237cc6ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M32 6c13 0 23 9 23 20 0 5-2 8-4 11-3 5-4 8-4 12 0 5-7 9-15 9s-15-4-15-9c0-4-1-7-4-12-2-3-4-6-4-11C9 15 19 6 32 6z' fill='url(%23g)'/%3E%3Ccircle cx='24' cy='26' r='5' fill='%23fff' opacity='.75'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-blob" aria-hidden="true"></span>
+      <span class="brand-name">크런치 슬라임 메이커</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" id="btnHelp" type="button">사용법</button>
+      <button class="btn btn-ghost" id="btnPanelToggle" type="button" aria-expanded="true">패널</button>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <section class="stage-wrap" id="stageWrap">
+      <div class="stage" id="stage">
+        <canvas id="glcanvas" aria-label="슬라임"></canvas>
+
+        <div class="dropzone" id="dropzone">
+          <div class="dz-inner">
+            <div class="dz-icon" aria-hidden="true">
+              <svg viewBox="0 0 64 64" width="64" height="64">
+                <path d="M32 8c11 0 20 8 20 18 0 4-1 7-3 10-3 4-4 7-4 11 0 5-6 9-13 9s-13-4-13-9c0-4-1-7-4-11-2-3-3-6-3-10C12 16 21 8 32 8z" fill="currentColor" opacity=".18"/>
+                <path d="M32 22v18M23 31l9-9 9 9" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h2>배경이 투명한 PNG를 올려주세요</h2>
+            <p>SD 캐릭터 토큰, 지비츠, 아크릴 스탠드 도안 전부 잘 어울려요.<br>드래그해서 놓거나 아래 버튼을 눌러주세요.</p>
+            <button class="btn btn-primary btn-lg" id="btnPickHero" type="button">이미지 고르기</button>
+            <button class="btn btn-ghost" id="btnDemo" type="button">샘플로 먼저 해볼래요</button>
+          </div>
+        </div>
+
+        <div class="stage-hint" id="stageHint" hidden>꾹 눌러보세요</div>
+
+        <div class="stage-tools">
+          <button class="tool" id="btnShuffle" type="button" title="파츠 다시 섞기">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>
+            <span>섞기</span>
+          </button>
+          <button class="tool" id="btnMute" type="button" title="소리 끄기" aria-pressed="false">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path class="wave" d="M15.5 8.5a5 5 0 0 1 0 7"/><path class="wave" d="M18.5 5.5a9 9 0 0 1 0 13"/><path class="slash" d="M2 2l20 20" stroke-width="2.4"/></svg>
+            <span>소리</span>
+          </button>
+          <button class="tool" id="btnSnap" type="button" title="PNG로 저장">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            <span>저장</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel" id="panel">
+      <div class="panel-scroll">
+
+        <details class="sec" open>
+          <summary><span class="sec-num">1</span>이미지</summary>
+          <div class="sec-body">
+            <div class="row">
+              <button class="btn btn-primary full" id="btnPick" type="button">이미지 불러오기</button>
+            </div>
+            <input type="file" id="fileInput" accept="image/png,image/webp,image/jpeg,image/gif" hidden>
+            <label class="switch">
+              <input type="checkbox" id="chkBgRemove">
+              <span class="track"><span class="thumb"></span></span>
+              <span class="switch-label">흰 배경 자동 제거<small>이미 투명한 PNG면 꺼두세요</small></span>
+            </label>
+            <div class="field" id="bgTolField" hidden>
+              <label for="rngBgTol">제거 강도 <output id="outBgTol">28</output></label>
+              <input type="range" id="rngBgTol" min="4" max="90" step="1" value="28">
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="chkTrim" checked>
+              <span class="track"><span class="thumb"></span></span>
+              <span class="switch-label">빈 여백 자동 정리<small>투명 테두리를 잘라 꽉 차게</small></span>
+            </label>
+          </div>
+        </details>
+
+        <details class="sec" open>
+          <summary><span class="sec-num">2</span>슬라임 질감</summary>
+          <div class="sec-body">
+            <div class="chips" id="skinPresets" role="group" aria-label="질감 프리셋"></div>
+            <div class="field">
+              <label for="rngGloss">광택 <output id="outGloss">0.55</output></label>
+              <input type="range" id="rngGloss" min="0" max="1" step="0.01" value="0.55">
+            </div>
+            <div class="field">
+              <label for="rngJelly">말랑함 <output id="outJelly">0.60</output></label>
+              <input type="range" id="rngJelly" min="0" max="1" step="0.01" value="0.6">
+            </div>
+            <div class="field">
+              <label for="rngWobble">흔들림 <output id="outWobble">0.45</output></label>
+              <input type="range" id="rngWobble" min="0" max="1" step="0.01" value="0.45">
+            </div>
+            <div class="field">
+              <label for="rngRim">테두리 <output id="outRim">0.40</output></label>
+              <input type="range" id="rngRim" min="0" max="1" step="0.01" value="0.4">
+            </div>
+            <div class="field">
+              <label for="rngTint">슬라임 색 섞기 <output id="outTint">0.18</output></label>
+              <input type="range" id="rngTint" min="0" max="0.85" step="0.01" value="0.18">
+            </div>
+            <div class="field inline">
+              <label for="colTint">색</label>
+              <input type="color" id="colTint" value="#8be9ff">
+            </div>
+          </div>
+        </details>
+
+        <details class="sec" open>
+          <summary><span class="sec-num">3</span>안에 넣을 파츠</summary>
+          <div class="sec-body">
+            <div class="tabs" id="partTabs" role="tablist"></div>
+            <div class="partgrid" id="partGrid"></div>
+            <div class="field">
+              <label for="rngCount">개수 <output id="outCount">18</output></label>
+              <input type="range" id="rngCount" min="0" max="80" step="1" value="18">
+            </div>
+            <div class="field">
+              <label for="rngSize">크기 <output id="outSize">1.00</output></label>
+              <input type="range" id="rngSize" min="0.4" max="2.4" step="0.02" value="1">
+            </div>
+            <div class="field">
+              <label for="rngDepth">깊이감 <output id="outDepth">0.55</output></label>
+              <input type="range" id="rngDepth" min="0" max="1" step="0.01" value="0.55">
+            </div>
+            <div class="field">
+              <label for="rngSpread">퍼짐 <output id="outSpread">0.40</output></label>
+              <input type="range" id="rngSpread" min="0" max="1" step="0.01" value="0.4">
+              <p class="note">낮추면 가장자리로 몰려서 얼굴을 덜 가려요.</p>
+            </div>
+            <div class="row two">
+              <button class="btn" id="btnShuffle2" type="button">다시 섞기</button>
+              <button class="btn btn-ghost" id="btnClearParts" type="button">전부 빼기</button>
+            </div>
+          </div>
+        </details>
+
+        <details class="sec" open>
+          <summary><span class="sec-num">4</span>소리</summary>
+          <div class="sec-body">
+            <div class="chips" id="soundPresets" role="group" aria-label="사운드 세트"></div>
+            <div class="field">
+              <label for="rngVol">볼륨 <output id="outVol">0.75</output></label>
+              <input type="range" id="rngVol" min="0" max="1" step="0.01" value="0.75">
+            </div>
+            <div class="field">
+              <label for="rngVerb">잔향(ASMR) <output id="outVerb">0.22</output></label>
+              <input type="range" id="rngVerb" min="0" max="1" step="0.01" value="0.22">
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="chkPartSound" checked>
+              <span class="track"><span class="thumb"></span></span>
+              <span class="switch-label">파츠 소리 섞기<small>넣은 파츠 종류에 맞는 소리가 함께 납니다</small></span>
+            </label>
+          </div>
+        </details>
+
+        <details class="sec">
+          <summary><span class="sec-num">5</span>배경 &amp; 내보내기</summary>
+          <div class="sec-body">
+            <div class="chips" id="bgPresets" role="group" aria-label="배경"></div>
+            <div class="field inline">
+              <label for="colBg">직접 고르기</label>
+              <input type="color" id="colBg" value="#fdf3f7">
+            </div>
+            <div class="row two">
+              <button class="btn" id="btnPng" type="button">PNG 저장</button>
+              <button class="btn" id="btnRec" type="button">영상 녹화</button>
+            </div>
+            <div class="row two">
+              <button class="btn btn-ghost" id="btnExport" type="button">설정 내보내기</button>
+              <button class="btn btn-ghost" id="btnImport" type="button">설정 가져오기</button>
+            </div>
+            <input type="file" id="presetInput" accept="application/json" hidden>
+            <p class="note" id="exportNote"></p>
+          </div>
+        </details>
+
+      </div>
+    </aside>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <dialog class="modal" id="helpModal">
+    <div class="modal-body">
+      <h2>사용법</h2>
+      <ol>
+        <li><b>이미지</b> — 배경이 투명한 PNG를 올려주세요. 배경이 흰색이면 <b>흰 배경 자동 제거</b>를 켜면 됩니다.</li>
+        <li><b>파츠</b> — 과일·동물·하트·크런치 중에서 골라 담으면 슬라임 안쪽에 박힙니다.</li>
+        <li><b>누르기</b> — 슬라임을 꾹 누르면 눌린 자국이 생기고 소리가 납니다. 끌면 문지르는 소리가 나요.</li>
+        <li><b>저장</b> — PNG 한 장 또는 영상(webm)으로 저장해서 그대로 올릴 수 있어요.</li>
+      </ol>
+      <p class="note">모든 처리는 이 브라우저 안에서만 일어납니다. 올린 이미지는 어디로도 전송되지 않아요.</p>
+      <button class="btn btn-primary" id="btnHelpClose" type="button">닫기</button>
+    </div>
+  </dialog>
+
+</div>
+
+<script src="src/parts.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/image.js"></script>
+<script src="src/physics.js"></script>
+<script src="src/gl.js"></script>
+<script src="src/app.js"></script>
+</body>
+</html>
