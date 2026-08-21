@@ -162,78 +162,103 @@
     try { mod.stop(t0 + o.dur + 0.02); } catch (e) {}
   }
 
-  /** 낮은 몸통 울림 — 슬라임 덩어리감 */
-  function body(t0, amount) {
+  /** 낮은 "툭" — 사인파 대신 저역 노이즈라 훨씬 덜 인공적입니다. */
+  function thud(t0, v) {
     if (voices > MAX_VOICES) return;
-    var osc = ctx.createOscillator(); osc.type = 'triangle';
-    osc.frequency.setValueAtTime(rnd(110, 150), t0);
-    osc.frequency.exponentialRampToValueAtTime(rnd(48, 70), t0 + 0.19);
+    var src = noiseSource(rnd(0.5, 0.9));
+    var lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(rnd(300, 420), t0);
+    lp.frequency.exponentialRampToValueAtTime(rnd(90, 130), t0 + 0.09);
+    lp.Q.value = 1.1;
     var g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.14 * amount, t0 + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
-    osc.connect(g); g.connect(master);
-    osc.start(t0); track(osc, t0 + 0.24);
+    g.gain.exponentialRampToValueAtTime(0.30 * v, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.10);
+    src.connect(lp); lp.connect(g); g.connect(master);
+    src.start(t0); track(src, t0 + 0.12);
   }
 
   /* ------------------------------------------------------------------ */
-  /* 태그 단위 음색 — 파츠 종류가 그대로 소리가 됩니다                     */
+  /* 슬라임 자체의 소리 — 끈적한 마찰. 음정이 있는 성분은 넣지 않습니다.   */
+  /* ------------------------------------------------------------------ */
+  var SLIME = {
+    crunch: { f0: 620, f1: 2600, f2: 480, q: 6.5, dur: 0.25, wet: 0.85, pops: 0.40 },
+    squish: { f0: 380, f1: 1500, f2: 260, q: 4.5, dur: 0.34, wet: 1.00, pops: 0.70 },
+    clay:   { f0: 900, f1: 3000, f2: 700, q: 12.0, dur: 0.19, wet: 0.60, pops: 0.20 },
+    bubble: { f0: 420, f1: 1300, f2: 300, q: 5.0, dur: 0.28, wet: 1.00, pops: 1.00 },
+    glass:  { f0: 800, f1: 3800, f2: 600, q: 8.0, dur: 0.22, wet: 0.70, pops: 0.30 }
+  };
+
+  function slimePress(t, v) {
+    var m = SLIME[state.preset] || SLIME.squish;
+    var j = rnd(0.9, 1.14);   // 누를 때마다 조금씩 달라지게
+    sweep(t, {
+      type: 'bandpass', q: m.q * rnd(0.85, 1.2),
+      f0: m.f0 * j, f1: m.f1 * j, f2: m.f2 * j,
+      dur: m.dur * rnd(0.85, 1.2), gain: 0.30 * v
+    });
+    sweep(t + 0.012, {
+      type: 'lowpass', q: 2.6,
+      f0: 900 * j, f1: 340 * j, f2: 170 * j,
+      dur: m.dur * 0.8, gain: 0.17 * v * m.wet
+    });
+    thud(t, v * 0.85);
+    if (Math.random() < m.pops * 0.75) {
+      pop(t + rnd(0.03, 0.11), { f0: rnd(420, 950), f1: rnd(90, 170), dur: rnd(0.05, 0.095), gain: 0.10 * v });
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 파츠끼리 부딪히는 와그작 — 파츠가 들어 있을 때만 납니다.              */
   /* ------------------------------------------------------------------ */
   var TAGS = {
     crunch: function (t, v) {
-      grains(t, { count: Math.round(9 + v * 16), spread: 0.10, fmin: 1400, fmax: 7200, gain: 0.30 * v, dmin: 0.006, dmax: 0.026 });
-      grains(t + 0.012, { count: Math.round(4 + v * 7), spread: 0.13, fmin: 500, fmax: 1800, q: 2.2, gain: 0.20 * v, dmin: 0.012, dmax: 0.05 });
+      grains(t, { count: Math.round(6 + v * 14), spread: 0.09, fmin: 1400, fmax: 7200, gain: 0.28 * v, dmin: 0.005, dmax: 0.026 });
     },
     squish: function (t, v) {
-      sweep(t, { f0: 420, f1: 1500, f2: 260, q: 8, dur: 0.26, gain: 0.30 * v });
-      sweep(t + 0.03, { f0: 900, f1: 380, f2: 180, q: 12, dur: 0.20, gain: 0.16 * v, type: 'bandpass' });
+      sweep(t, { f0: 420, f1: 1500, f2: 260, q: 8, dur: 0.20, gain: 0.20 * v });
     },
     clay: function (t, v) {
-      sweep(t, { f0: 1700, f1: 2900, f2: 1200, q: 17, dur: 0.16, gain: 0.24 * v, type: 'bandpass' });
-      grains(t, { count: 5, spread: 0.05, fmin: 2400, fmax: 5200, q: 14, gain: 0.14 * v, dmin: 0.01, dmax: 0.03 });
+      sweep(t, { f0: 1700, f1: 2900, f2: 1200, q: 17, dur: 0.15, gain: 0.18 * v, type: 'bandpass' });
     },
     bubble: function (t, v) {
-      var n = Math.round(2 + v * 4);
-      for (var i = 0; i < n; i++) {
-        pop(t + i * rnd(0.02, 0.06), { f0: rnd(600, 1400), f1: rnd(90, 200), dur: rnd(0.05, 0.11), gain: 0.26 * v });
-      }
+      var n = Math.round(2 + v * 3);
+      for (var i = 0; i < n; i++) pop(t + i * rnd(0.02, 0.06), { f0: rnd(600, 1400), f1: rnd(90, 200), dur: rnd(0.05, 0.11), gain: 0.22 * v });
     },
     bead: function (t, v) {
       var n = Math.round(2 + v * 4);
-      for (var i = 0; i < n; i++) {
-        ping(t + i * rnd(0.015, 0.05), { freq: rnd(1100, 2600), ratio: rnd(2.1, 3.4), index: rnd(1, 2.4), dur: rnd(0.06, 0.13), gain: 0.15 * v });
-      }
+      for (var i = 0; i < n; i++) ping(t + i * rnd(0.012, 0.05), { freq: rnd(1100, 2600), ratio: rnd(2.1, 3.4), index: rnd(1, 2.4), dur: rnd(0.05, 0.12), gain: 0.14 * v });
     },
     glass: function (t, v) {
       var n = Math.round(3 + v * 5);
-      for (var i = 0; i < n; i++) {
-        ping(t + i * rnd(0.01, 0.045), { freq: rnd(2600, 6200), ratio: rnd(3.1, 5.2), index: rnd(1.4, 3), dur: rnd(0.05, 0.12), gain: 0.10 * v });
-      }
-      grains(t, { count: 6, spread: 0.06, fmin: 4000, fmax: 9000, q: 16, gain: 0.10 * v, dmin: 0.005, dmax: 0.02 });
+      for (var i = 0; i < n; i++) ping(t + i * rnd(0.01, 0.045), { freq: rnd(2600, 6200), ratio: rnd(3.1, 5.2), index: rnd(1.4, 3), dur: rnd(0.05, 0.11), gain: 0.10 * v });
     },
     pop: function (t, v) { TAGS.bubble(t, v); }
   };
 
-  var PRESET_MIX = {
-    crunch: [['crunch', 1], ['squish', 0.35], ['clay', 0.2]],
-    squish: [['squish', 1], ['bubble', 0.3]],
-    clay:   [['clay', 1], ['crunch', 0.25]],
-    bubble: [['bubble', 1], ['squish', 0.45]],
-    glass:  [['glass', 1], ['bead', 0.5], ['crunch', 0.25]]
-  };
-
-  function render(t, intensity) {
-    var mix = PRESET_MIX[state.preset] || PRESET_MIX.crunch;
-    for (var i = 0; i < mix.length; i++) {
-      var fn = TAGS[mix[i][0]];
-      if (fn) fn(t, Math.max(0.05, intensity * mix[i][1]));
-    }
-    if (state.usePartTags && state.partTags.length) {
-      var share = 0.55 / Math.sqrt(state.partTags.length);
-      for (var j = 0; j < state.partTags.length; j++) {
-        var f = TAGS[state.partTags[j]];
-        if (f) f(t + rnd(0, 0.03), Math.max(0.05, intensity * share));
-      }
+  /**
+   * load 0~1 — 슬라임에 든 파츠가 얼마나 많은지. 많을수록 알갱이가 촘촘하고 오래 갑니다.
+   * 파츠가 하나도 없으면(load 0) 아무 소리도 내지 않습니다.
+   */
+  function partCrunch(t, v, load) {
+    if (load <= 0.001 || !state.usePartTags) return;
+    var amt = v * (0.35 + load * 0.65);
+    grains(t + rnd(0, 0.012), {
+      count: Math.round((3 + load * 20) * v),
+      spread: 0.05 + load * 0.10,
+      fmin: 1300, fmax: 7000, gain: 0.30 * amt, dmin: 0.005, dmax: 0.030
+    });
+    grains(t + rnd(0.015, 0.045), {
+      count: Math.round((2 + load * 8) * v),
+      spread: 0.09 + load * 0.09,
+      fmin: 380, fmax: 1700, q: 2.4, gain: 0.19 * amt, dmin: 0.012, dmax: 0.055
+    });
+    // 넣은 파츠 종류의 색을 얹습니다(유리는 쨍하게, 구슬은 또르륵).
+    var tags = state.partTags;
+    for (var i = 0; i < tags.length; i++) {
+      var fn = TAGS[tags[i]];
+      if (fn && Math.random() < 0.55 + load * 0.4) fn(t + rnd(0, 0.04), amt * (0.5 / Math.sqrt(tags.length)));
     }
   }
 
@@ -246,34 +271,44 @@
     init: init,
     ready: function () { return !!ctx; },
 
-    press: function (intensity) {
+    /** 꾹 누르기. load = 파츠가 든 정도 0~1 */
+    press: function (intensity, load) {
       if (state.muted || !init()) return;
       var t = ctx.currentTime + 0.001;
       var v = Math.max(0.15, Math.min(1, intensity == null ? 0.8 : intensity));
-      body(t, v);
-      render(t, v);
+      slimePress(t, v);
+      partCrunch(t + 0.008, v, load || 0);
     },
 
-    /** 문지를 때 — 너무 자주 울리지 않도록 간격을 둡니다 */
-    rub: function (intensity) {
+    /** 문지르기 — 너무 자주 울리지 않도록 간격을 둡니다. */
+    rub: function (intensity, load) {
       if (state.muted || !init()) return;
       var now = ctx.currentTime;
       if (now - lastRub < 0.055) return;
       lastRub = now;
-      var v = Math.max(0.05, Math.min(0.55, intensity));
-      sweep(now + 0.001, { f0: 700, f1: 2000, f2: 500, q: 6, dur: 0.13, gain: 0.16 * v, type: 'bandpass' });
-      if (state.preset === 'crunch' || state.preset === 'glass') {
-        grains(now + 0.001, { count: Math.round(2 + v * 8), spread: 0.06, fmin: 2000, fmax: 8000, gain: 0.16 * v, dmin: 0.004, dmax: 0.018 });
+      var v = Math.max(0.05, Math.min(0.6, intensity));
+      var m = SLIME[state.preset] || SLIME.squish;
+      sweep(now + 0.001, {
+        type: 'bandpass', q: m.q * 0.8,
+        f0: m.f0 * 1.15, f1: m.f1 * 0.9, f2: m.f2 * 1.1,
+        dur: 0.14, gain: 0.19 * v
+      });
+      if (load > 0.001 && state.usePartTags) {
+        grains(now + 0.001, {
+          count: Math.round((1 + load * 9) * v * 2),
+          spread: 0.055, fmin: 1800, fmax: 7600,
+          gain: 0.22 * v * (0.4 + load * 0.6), dmin: 0.004, dmax: 0.020
+        });
       }
     },
 
-    /** 손을 뗄 때 — 되돌아오는 젤리 소리 */
+    /** 손을 뗄 때 — 붙었다 떨어지는 소리 */
     release: function (intensity) {
       if (state.muted || !init()) return;
       var t = ctx.currentTime + 0.001;
-      var v = Math.max(0.1, Math.min(0.8, intensity));
-      sweep(t, { f0: 260, f1: 900, f2: 200, q: 10, dur: 0.22, gain: 0.16 * v });
-      pop(t + 0.02, { f0: rnd(300, 520), f1: rnd(80, 130), dur: 0.1, gain: 0.1 * v });
+      var v = Math.max(0.08, Math.min(0.7, intensity));
+      sweep(t, { type: 'bandpass', q: 7, f0: 300, f1: 1100, f2: 240, dur: 0.16, gain: 0.15 * v });
+      if (Math.random() < 0.6) pop(t + 0.02, { f0: rnd(300, 560), f1: rnd(80, 140), dur: 0.08, gain: 0.09 * v });
     },
 
     setVolume: function (v) {
@@ -291,7 +326,7 @@
         dry.gain.setTargetAtTime(1 - v * 0.5, ctx.currentTime, 0.05);
       }
     },
-    setPreset: function (id) { if (PRESET_MIX[id]) state.preset = id; },
+    setPreset: function (id) { if (SLIME[id]) state.preset = id; },
     setPartTags: function (tags) {
       var seen = {}, out = [];
       (tags || []).forEach(function (t) { if (t && !seen[t]) { seen[t] = 1; out.push(t); } });
@@ -299,7 +334,6 @@
     },
     setUsePartTags: function (b) { state.usePartTags = !!b; },
     isMuted: function () { return state.muted; },
-    /** 캔버스 녹화에 오디오를 함께 담기 위한 출력 스트림 */
     captureStream: function () {
       if (!init() || !ctx.createMediaStreamDestination) return null;
       var dest = ctx.createMediaStreamDestination();

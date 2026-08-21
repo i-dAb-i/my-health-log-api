@@ -168,7 +168,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; transition:.14s;
   white-space:nowrap;
 }
-.btn:hover{border-color:var(--accent); transform:translateY(-1px)}
+.btn:hover:not(:disabled){border-color:var(--accent); transform:translateY(-1px)}
+.btn:disabled,.tool:disabled{opacity:.4; cursor:default}
+.tool:disabled:hover{color:var(--ink-2); border-color:var(--line); transform:none}
 .btn:active{transform:translateY(0)}
 .btn-primary{background:linear-gradient(140deg,var(--accent),#ff8fc0); color:var(--accent-ink); border-color:transparent}
 .btn-primary:hover{filter:brightness(1.05)}

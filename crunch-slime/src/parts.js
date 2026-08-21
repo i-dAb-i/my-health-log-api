@@ -104,11 +104,11 @@
     { id:'watermelon', name:'수박', cat:'fruit', sound:'squish', ratio:1,
       colors:['#ff5e6c','#ff8189'],
       draw:function(ctx,s,c){
-        ctx.beginPath(); ctx.moveTo(0,s*0.92); ctx.arc(0,s*0.92,s*1.6,-Math.PI*0.78,-Math.PI*0.22);
+        ctx.beginPath(); ctx.moveTo(0,s*0.78); ctx.arc(0,s*0.78,s*1.34,-Math.PI*0.78,-Math.PI*0.22);
         ctx.closePath(); ctx.fillStyle='#3fae5a'; ctx.fill();
-        ctx.beginPath(); ctx.moveTo(0,s*0.92); ctx.arc(0,s*0.92,s*1.45,-Math.PI*0.765,-Math.PI*0.235);
+        ctx.beginPath(); ctx.moveTo(0,s*0.78); ctx.arc(0,s*0.78,s*1.21,-Math.PI*0.765,-Math.PI*0.235);
         ctx.closePath(); ctx.fillStyle='#eafbe4'; ctx.fill();
-        ctx.beginPath(); ctx.moveTo(0,s*0.92); ctx.arc(0,s*0.92,s*1.3,-Math.PI*0.755,-Math.PI*0.245);
+        ctx.beginPath(); ctx.moveTo(0,s*0.78); ctx.arc(0,s*0.78,s*1.09,-Math.PI*0.755,-Math.PI*0.245);
         ctx.closePath(); ctx.fillStyle=c; ctx.fill();
         ell(ctx,-s*0.34,-s*0.05,s*0.06,s*0.1,0.3,'#2f2a20');
         ell(ctx,s*0.34,-s*0.05,s*0.06,s*0.1,-0.3,'#2f2a20');
@@ -397,12 +397,54 @@
     return cv;
   }
 
+  /**
+   * (파츠 × 색상) 조합을 한 장의 스프라이트 시트로 굽습니다.
+   * 파츠는 슬라임과 달리 뭉개지지 않는 고체라서, 본체 텍스처에 섞어 그리지 않고
+   * 이 아틀라스에서 쿼드로 따로 그립니다. 위치와 회전만 밀리고 모양은 그대로입니다.
+   */
+  function buildAtlas(tilePx) {
+    var tile = tilePx || 128;
+    var cells = [];
+    PARTS.forEach(function (p) {
+      for (var i = 0; i < p.colors.length; i++) cells.push({ id: p.id, ci: i });
+    });
+    var cols = Math.ceil(Math.sqrt(cells.length));
+    var rows = Math.ceil(cells.length / cols);
+
+    var cv = document.createElement('canvas');
+    cv.width = cols * tile;
+    cv.height = rows * tile;
+    var ctx = cv.getContext('2d');
+
+    var uv = {};
+    var inset = 0.5 / Math.max(cv.width, cv.height); // 이웃 타일 번짐 방지
+    cells.forEach(function (cell, n) {
+      var cx = (n % cols), cy = Math.floor(n / cols);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(cx * tile, cy * tile, tile, tile);
+      ctx.clip();
+      ctx.translate((cx + 0.5) * tile, (cy + 0.5) * tile);
+      drawPart(ctx, cell.id, tile * 0.34, cell.ci, 0);
+      ctx.restore();
+      uv[cell.id + '|' + cell.ci] = [
+        (cx * tile) / cv.width + inset,
+        (cy * tile) / cv.height + inset,
+        ((cx + 1) * tile) / cv.width - inset,
+        ((cy + 1) * tile) / cv.height - inset
+      ];
+    });
+
+    return { canvas: cv, uv: uv, tile: tile, cols: cols, rows: rows, count: cells.length };
+  }
+
   global.CS = global.CS || {};
   global.CS.Parts = {
     CATEGORIES: CATEGORIES,
     LIST: PARTS,
     byId: function (id) { return BY_ID[id]; },
     draw: drawPart,
-    thumbnail: thumbnail
+    thumbnail: thumbnail,
+    buildAtlas: buildAtlas
   };
 })(window);

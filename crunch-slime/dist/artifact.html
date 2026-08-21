@@ -174,7 +174,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; transition:.14s;
   white-space:nowrap;
 }
-.btn:hover{border-color:var(--accent); transform:translateY(-1px)}
+.btn:hover:not(:disabled){border-color:var(--accent); transform:translateY(-1px)}
+.btn:disabled,.tool:disabled{opacity:.4; cursor:default}
+.tool:disabled:hover{color:var(--ink-2); border-color:var(--line); transform:none}
 .btn:active{transform:translateY(0)}
 .btn-primary{background:linear-gradient(140deg,var(--accent),#ff8fc0); color:var(--accent-ink); border-color:transparent}
 .btn-primary:hover{filter:brightness(1.05)}
@@ -302,6 +304,10 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
         <div class="stage-hint" id="stageHint" hidden>꾹 눌러보세요</div>
 
         <div class="stage-tools">
+          <button class="tool" id="btnReset" type="button" title="처음 모습으로 되돌리기" disabled>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            <span>되돌리기</span>
+          </button>
           <button class="tool" id="btnShuffle" type="button" title="파츠 다시 섞기">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>
             <span>섞기</span>
@@ -358,7 +364,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
               <input type="range" id="rngJelly" min="0" max="1" step="0.01" value="0.6">
             </div>
             <div class="field">
-              <label for="rngWobble">흔들림 <output id="outWobble">0.45</output></label>
+              <label for="rngWobble">숨쉬기 <output id="outWobble">0.45</output></label>
               <input type="range" id="rngWobble" min="0" max="1" step="0.01" value="0.45">
             </div>
             <div class="field">
@@ -373,6 +379,8 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
               <label for="colTint">색</label>
               <input type="color" id="colTint" value="#8be9ff">
             </div>
+            <button class="btn full" id="btnReset2" type="button" disabled>처음 모습으로 되돌리기</button>
+            <p class="note">누르고 문지른 자국은 지워지지 않고 계속 쌓입니다. 다 뭉갰으면 여기서 되돌리세요.</p>
           </div>
         </details>
 
@@ -458,7 +466,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       <ol>
         <li><b>이미지</b> — 배경이 투명한 PNG를 올려주세요. 배경이 흰색이면 <b>흰 배경 자동 제거</b>를 켜면 됩니다.</li>
         <li><b>파츠</b> — 과일·동물·하트·크런치 중에서 골라 담으면 슬라임 안쪽에 박힙니다.</li>
-        <li><b>누르기</b> — 슬라임을 꾹 누르면 눌린 자국이 생기고 소리가 납니다. 끌면 문지르는 소리가 나요.</li>
+        <li><b>주무르기</b> — 꾹 누르거나 문지르면 진짜 점토처럼 <b>색이 섞이면서 형태가 무너집니다.</b>
+          손을 떼도 돌아오지 않고 계속 쌓여요. 파츠는 고체라 모양은 그대로인 채 밀려납니다.</li>
+        <li><b>되돌리기</b> — 충분히 망가뜨렸으면 <b>되돌리기</b>로 처음 모습으로 돌아갑니다.</li>
         <li><b>저장</b> — PNG 한 장 또는 영상(webm)으로 저장해서 그대로 올릴 수 있어요.</li>
       </ol>
       <p class="note">모든 처리는 이 브라우저 안에서만 일어납니다. 올린 이미지는 어디로도 전송되지 않아요.</p>
@@ -576,11 +586,11 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     { id:'watermelon', name:'수박', cat:'fruit', sound:'squish', ratio:1,
       colors:['#ff5e6c','#ff8189'],
       draw:function(ctx,s,c){
-        ctx.beginPath(); ctx.moveTo(0,s*0.92); ctx.arc(0,s*0.92,s*1.6,-Math.PI*0.78,-Math.PI*0.22);
+        ctx.beginPath(); ctx.moveTo(0,s*0.78); ctx.arc(0,s*0.78,s*1.34,-Math.PI*0.78,-Math.PI*0.22);
         ctx.closePath(); ctx.fillStyle='#3fae5a'; ctx.fill();
-        ctx.beginPath(); ctx.moveTo(0,s*0.92); ctx.arc(0,s*0.92,s*1.45,-Math.PI*0.765,-Math.PI*0.235);
+        ctx.beginPath(); ctx.moveTo(0,s*0.78); ctx.arc(0,s*0.78,s*1.21,-Math.PI*0.765,-Math.PI*0.235);
         ctx.closePath(); ctx.fillStyle='#eafbe4'; ctx.fill();
-        ctx.beginPath(); ctx.moveTo(0,s*0.92); ctx.arc(0,s*0.92,s*1.3,-Math.PI*0.755,-Math.PI*0.245);
+        ctx.beginPath(); ctx.moveTo(0,s*0.78); ctx.arc(0,s*0.78,s*1.09,-Math.PI*0.755,-Math.PI*0.245);
         ctx.closePath(); ctx.fillStyle=c; ctx.fill();
         ell(ctx,-s*0.34,-s*0.05,s*0.06,s*0.1,0.3,'#2f2a20');
         ell(ctx,s*0.34,-s*0.05,s*0.06,s*0.1,-0.3,'#2f2a20');
@@ -869,13 +879,55 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     return cv;
   }
 
+  /**
+   * (파츠 × 색상) 조합을 한 장의 스프라이트 시트로 굽습니다.
+   * 파츠는 슬라임과 달리 뭉개지지 않는 고체라서, 본체 텍스처에 섞어 그리지 않고
+   * 이 아틀라스에서 쿼드로 따로 그립니다. 위치와 회전만 밀리고 모양은 그대로입니다.
+   */
+  function buildAtlas(tilePx) {
+    var tile = tilePx || 128;
+    var cells = [];
+    PARTS.forEach(function (p) {
+      for (var i = 0; i < p.colors.length; i++) cells.push({ id: p.id, ci: i });
+    });
+    var cols = Math.ceil(Math.sqrt(cells.length));
+    var rows = Math.ceil(cells.length / cols);
+
+    var cv = document.createElement('canvas');
+    cv.width = cols * tile;
+    cv.height = rows * tile;
+    var ctx = cv.getContext('2d');
+
+    var uv = {};
+    var inset = 0.5 / Math.max(cv.width, cv.height); // 이웃 타일 번짐 방지
+    cells.forEach(function (cell, n) {
+      var cx = (n % cols), cy = Math.floor(n / cols);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(cx * tile, cy * tile, tile, tile);
+      ctx.clip();
+      ctx.translate((cx + 0.5) * tile, (cy + 0.5) * tile);
+      drawPart(ctx, cell.id, tile * 0.34, cell.ci, 0);
+      ctx.restore();
+      uv[cell.id + '|' + cell.ci] = [
+        (cx * tile) / cv.width + inset,
+        (cy * tile) / cv.height + inset,
+        ((cx + 1) * tile) / cv.width - inset,
+        ((cy + 1) * tile) / cv.height - inset
+      ];
+    });
+
+    return { canvas: cv, uv: uv, tile: tile, cols: cols, rows: rows, count: cells.length };
+  }
+
   global.CS = global.CS || {};
   global.CS.Parts = {
     CATEGORIES: CATEGORIES,
     LIST: PARTS,
     byId: function (id) { return BY_ID[id]; },
     draw: drawPart,
-    thumbnail: thumbnail
+    thumbnail: thumbnail,
+    buildAtlas: buildAtlas
   };
 })(window);
 
@@ -1044,78 +1096,103 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     try { mod.stop(t0 + o.dur + 0.02); } catch (e) {}
   }
 
-  /** 낮은 몸통 울림 — 슬라임 덩어리감 */
-  function body(t0, amount) {
+  /** 낮은 "툭" — 사인파 대신 저역 노이즈라 훨씬 덜 인공적입니다. */
+  function thud(t0, v) {
     if (voices > MAX_VOICES) return;
-    var osc = ctx.createOscillator(); osc.type = 'triangle';
-    osc.frequency.setValueAtTime(rnd(110, 150), t0);
-    osc.frequency.exponentialRampToValueAtTime(rnd(48, 70), t0 + 0.19);
+    var src = noiseSource(rnd(0.5, 0.9));
+    var lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(rnd(300, 420), t0);
+    lp.frequency.exponentialRampToValueAtTime(rnd(90, 130), t0 + 0.09);
+    lp.Q.value = 1.1;
     var g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.14 * amount, t0 + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
-    osc.connect(g); g.connect(master);
-    osc.start(t0); track(osc, t0 + 0.24);
+    g.gain.exponentialRampToValueAtTime(0.30 * v, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.10);
+    src.connect(lp); lp.connect(g); g.connect(master);
+    src.start(t0); track(src, t0 + 0.12);
   }
 
   /* ------------------------------------------------------------------ */
-  /* 태그 단위 음색 — 파츠 종류가 그대로 소리가 됩니다                     */
+  /* 슬라임 자체의 소리 — 끈적한 마찰. 음정이 있는 성분은 넣지 않습니다.   */
+  /* ------------------------------------------------------------------ */
+  var SLIME = {
+    crunch: { f0: 620, f1: 2600, f2: 480, q: 6.5, dur: 0.25, wet: 0.85, pops: 0.40 },
+    squish: { f0: 380, f1: 1500, f2: 260, q: 4.5, dur: 0.34, wet: 1.00, pops: 0.70 },
+    clay:   { f0: 900, f1: 3000, f2: 700, q: 12.0, dur: 0.19, wet: 0.60, pops: 0.20 },
+    bubble: { f0: 420, f1: 1300, f2: 300, q: 5.0, dur: 0.28, wet: 1.00, pops: 1.00 },
+    glass:  { f0: 800, f1: 3800, f2: 600, q: 8.0, dur: 0.22, wet: 0.70, pops: 0.30 }
+  };
+
+  function slimePress(t, v) {
+    var m = SLIME[state.preset] || SLIME.squish;
+    var j = rnd(0.9, 1.14);   // 누를 때마다 조금씩 달라지게
+    sweep(t, {
+      type: 'bandpass', q: m.q * rnd(0.85, 1.2),
+      f0: m.f0 * j, f1: m.f1 * j, f2: m.f2 * j,
+      dur: m.dur * rnd(0.85, 1.2), gain: 0.30 * v
+    });
+    sweep(t + 0.012, {
+      type: 'lowpass', q: 2.6,
+      f0: 900 * j, f1: 340 * j, f2: 170 * j,
+      dur: m.dur * 0.8, gain: 0.17 * v * m.wet
+    });
+    thud(t, v * 0.85);
+    if (Math.random() < m.pops * 0.75) {
+      pop(t + rnd(0.03, 0.11), { f0: rnd(420, 950), f1: rnd(90, 170), dur: rnd(0.05, 0.095), gain: 0.10 * v });
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 파츠끼리 부딪히는 와그작 — 파츠가 들어 있을 때만 납니다.              */
   /* ------------------------------------------------------------------ */
   var TAGS = {
     crunch: function (t, v) {
-      grains(t, { count: Math.round(9 + v * 16), spread: 0.10, fmin: 1400, fmax: 7200, gain: 0.30 * v, dmin: 0.006, dmax: 0.026 });
-      grains(t + 0.012, { count: Math.round(4 + v * 7), spread: 0.13, fmin: 500, fmax: 1800, q: 2.2, gain: 0.20 * v, dmin: 0.012, dmax: 0.05 });
+      grains(t, { count: Math.round(6 + v * 14), spread: 0.09, fmin: 1400, fmax: 7200, gain: 0.28 * v, dmin: 0.005, dmax: 0.026 });
     },
     squish: function (t, v) {
-      sweep(t, { f0: 420, f1: 1500, f2: 260, q: 8, dur: 0.26, gain: 0.30 * v });
-      sweep(t + 0.03, { f0: 900, f1: 380, f2: 180, q: 12, dur: 0.20, gain: 0.16 * v, type: 'bandpass' });
+      sweep(t, { f0: 420, f1: 1500, f2: 260, q: 8, dur: 0.20, gain: 0.20 * v });
     },
     clay: function (t, v) {
-      sweep(t, { f0: 1700, f1: 2900, f2: 1200, q: 17, dur: 0.16, gain: 0.24 * v, type: 'bandpass' });
-      grains(t, { count: 5, spread: 0.05, fmin: 2400, fmax: 5200, q: 14, gain: 0.14 * v, dmin: 0.01, dmax: 0.03 });
+      sweep(t, { f0: 1700, f1: 2900, f2: 1200, q: 17, dur: 0.15, gain: 0.18 * v, type: 'bandpass' });
     },
     bubble: function (t, v) {
-      var n = Math.round(2 + v * 4);
-      for (var i = 0; i < n; i++) {
-        pop(t + i * rnd(0.02, 0.06), { f0: rnd(600, 1400), f1: rnd(90, 200), dur: rnd(0.05, 0.11), gain: 0.26 * v });
-      }
+      var n = Math.round(2 + v * 3);
+      for (var i = 0; i < n; i++) pop(t + i * rnd(0.02, 0.06), { f0: rnd(600, 1400), f1: rnd(90, 200), dur: rnd(0.05, 0.11), gain: 0.22 * v });
     },
     bead: function (t, v) {
       var n = Math.round(2 + v * 4);
-      for (var i = 0; i < n; i++) {
-        ping(t + i * rnd(0.015, 0.05), { freq: rnd(1100, 2600), ratio: rnd(2.1, 3.4), index: rnd(1, 2.4), dur: rnd(0.06, 0.13), gain: 0.15 * v });
-      }
+      for (var i = 0; i < n; i++) ping(t + i * rnd(0.012, 0.05), { freq: rnd(1100, 2600), ratio: rnd(2.1, 3.4), index: rnd(1, 2.4), dur: rnd(0.05, 0.12), gain: 0.14 * v });
     },
     glass: function (t, v) {
       var n = Math.round(3 + v * 5);
-      for (var i = 0; i < n; i++) {
-        ping(t + i * rnd(0.01, 0.045), { freq: rnd(2600, 6200), ratio: rnd(3.1, 5.2), index: rnd(1.4, 3), dur: rnd(0.05, 0.12), gain: 0.10 * v });
-      }
-      grains(t, { count: 6, spread: 0.06, fmin: 4000, fmax: 9000, q: 16, gain: 0.10 * v, dmin: 0.005, dmax: 0.02 });
+      for (var i = 0; i < n; i++) ping(t + i * rnd(0.01, 0.045), { freq: rnd(2600, 6200), ratio: rnd(3.1, 5.2), index: rnd(1.4, 3), dur: rnd(0.05, 0.11), gain: 0.10 * v });
     },
     pop: function (t, v) { TAGS.bubble(t, v); }
   };
 
-  var PRESET_MIX = {
-    crunch: [['crunch', 1], ['squish', 0.35], ['clay', 0.2]],
-    squish: [['squish', 1], ['bubble', 0.3]],
-    clay:   [['clay', 1], ['crunch', 0.25]],
-    bubble: [['bubble', 1], ['squish', 0.45]],
-    glass:  [['glass', 1], ['bead', 0.5], ['crunch', 0.25]]
-  };
-
-  function render(t, intensity) {
-    var mix = PRESET_MIX[state.preset] || PRESET_MIX.crunch;
-    for (var i = 0; i < mix.length; i++) {
-      var fn = TAGS[mix[i][0]];
-      if (fn) fn(t, Math.max(0.05, intensity * mix[i][1]));
-    }
-    if (state.usePartTags && state.partTags.length) {
-      var share = 0.55 / Math.sqrt(state.partTags.length);
-      for (var j = 0; j < state.partTags.length; j++) {
-        var f = TAGS[state.partTags[j]];
-        if (f) f(t + rnd(0, 0.03), Math.max(0.05, intensity * share));
-      }
+  /**
+   * load 0~1 — 슬라임에 든 파츠가 얼마나 많은지. 많을수록 알갱이가 촘촘하고 오래 갑니다.
+   * 파츠가 하나도 없으면(load 0) 아무 소리도 내지 않습니다.
+   */
+  function partCrunch(t, v, load) {
+    if (load <= 0.001 || !state.usePartTags) return;
+    var amt = v * (0.35 + load * 0.65);
+    grains(t + rnd(0, 0.012), {
+      count: Math.round((3 + load * 20) * v),
+      spread: 0.05 + load * 0.10,
+      fmin: 1300, fmax: 7000, gain: 0.30 * amt, dmin: 0.005, dmax: 0.030
+    });
+    grains(t + rnd(0.015, 0.045), {
+      count: Math.round((2 + load * 8) * v),
+      spread: 0.09 + load * 0.09,
+      fmin: 380, fmax: 1700, q: 2.4, gain: 0.19 * amt, dmin: 0.012, dmax: 0.055
+    });
+    // 넣은 파츠 종류의 색을 얹습니다(유리는 쨍하게, 구슬은 또르륵).
+    var tags = state.partTags;
+    for (var i = 0; i < tags.length; i++) {
+      var fn = TAGS[tags[i]];
+      if (fn && Math.random() < 0.55 + load * 0.4) fn(t + rnd(0, 0.04), amt * (0.5 / Math.sqrt(tags.length)));
     }
   }
 
@@ -1128,34 +1205,44 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     init: init,
     ready: function () { return !!ctx; },
 
-    press: function (intensity) {
+    /** 꾹 누르기. load = 파츠가 든 정도 0~1 */
+    press: function (intensity, load) {
       if (state.muted || !init()) return;
       var t = ctx.currentTime + 0.001;
       var v = Math.max(0.15, Math.min(1, intensity == null ? 0.8 : intensity));
-      body(t, v);
-      render(t, v);
+      slimePress(t, v);
+      partCrunch(t + 0.008, v, load || 0);
     },
 
-    /** 문지를 때 — 너무 자주 울리지 않도록 간격을 둡니다 */
-    rub: function (intensity) {
+    /** 문지르기 — 너무 자주 울리지 않도록 간격을 둡니다. */
+    rub: function (intensity, load) {
       if (state.muted || !init()) return;
       var now = ctx.currentTime;
       if (now - lastRub < 0.055) return;
       lastRub = now;
-      var v = Math.max(0.05, Math.min(0.55, intensity));
-      sweep(now + 0.001, { f0: 700, f1: 2000, f2: 500, q: 6, dur: 0.13, gain: 0.16 * v, type: 'bandpass' });
-      if (state.preset === 'crunch' || state.preset === 'glass') {
-        grains(now + 0.001, { count: Math.round(2 + v * 8), spread: 0.06, fmin: 2000, fmax: 8000, gain: 0.16 * v, dmin: 0.004, dmax: 0.018 });
+      var v = Math.max(0.05, Math.min(0.6, intensity));
+      var m = SLIME[state.preset] || SLIME.squish;
+      sweep(now + 0.001, {
+        type: 'bandpass', q: m.q * 0.8,
+        f0: m.f0 * 1.15, f1: m.f1 * 0.9, f2: m.f2 * 1.1,
+        dur: 0.14, gain: 0.19 * v
+      });
+      if (load > 0.001 && state.usePartTags) {
+        grains(now + 0.001, {
+          count: Math.round((1 + load * 9) * v * 2),
+          spread: 0.055, fmin: 1800, fmax: 7600,
+          gain: 0.22 * v * (0.4 + load * 0.6), dmin: 0.004, dmax: 0.020
+        });
       }
     },
 
-    /** 손을 뗄 때 — 되돌아오는 젤리 소리 */
+    /** 손을 뗄 때 — 붙었다 떨어지는 소리 */
     release: function (intensity) {
       if (state.muted || !init()) return;
       var t = ctx.currentTime + 0.001;
-      var v = Math.max(0.1, Math.min(0.8, intensity));
-      sweep(t, { f0: 260, f1: 900, f2: 200, q: 10, dur: 0.22, gain: 0.16 * v });
-      pop(t + 0.02, { f0: rnd(300, 520), f1: rnd(80, 130), dur: 0.1, gain: 0.1 * v });
+      var v = Math.max(0.08, Math.min(0.7, intensity));
+      sweep(t, { type: 'bandpass', q: 7, f0: 300, f1: 1100, f2: 240, dur: 0.16, gain: 0.15 * v });
+      if (Math.random() < 0.6) pop(t + 0.02, { f0: rnd(300, 560), f1: rnd(80, 140), dur: 0.08, gain: 0.09 * v });
     },
 
     setVolume: function (v) {
@@ -1173,7 +1260,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
         dry.gain.setTargetAtTime(1 - v * 0.5, ctx.currentTime, 0.05);
       }
     },
-    setPreset: function (id) { if (PRESET_MIX[id]) state.preset = id; },
+    setPreset: function (id) { if (SLIME[id]) state.preset = id; },
     setPartTags: function (tags) {
       var seen = {}, out = [];
       (tags || []).forEach(function (t) { if (t && !seen[t]) { seen[t] = 1; out.push(t); } });
@@ -1181,7 +1268,6 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     },
     setUsePartTags: function (b) { state.usePartTags = !!b; },
     isMuted: function () { return state.muted; },
-    /** 캔버스 녹화에 오디오를 함께 담기 위한 출력 스트림 */
     captureStream: function () {
       if (!init() || !ctx.createMediaStreamDestination) return null;
       var dest = ctx.createMediaStreamDestination();
@@ -1453,43 +1539,54 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
 })(window);
 
 /* ===== src/physics.js ===== */
-/* 크런치 슬라임 — 말랑말랑 물리
- * 누른 자리마다 감쇠 스프링을 하나씩 붙여서, 손을 떼면 출렁이며 되돌아옵니다.
+/* 크런치 슬라임 — 반죽(kneading) 모델
+ *
+ * 스프링으로 눌렀다 되돌아오는 방식이 아닙니다. 누르는 동안 아주 작은 변형을
+ * 매 프레임 텍스처에 "영구히" 쌓습니다. 손을 떼도 돌아오지 않고, 계속 주무르면
+ * 점토처럼 색이 섞이며 원래 형태가 무너집니다. 되돌리려면 reset 뿐입니다.
+ *
+ * 변형은 두 성분입니다.
+ *   누름  — 누른 지점에서 물질이 방사상으로 밀려 퍼집니다.
+ *   끌기  — 손가락이 간 방향으로 물질이 끌려갑니다(문지르기).
  */
 (function (global) {
   'use strict';
 
   var MAX_POKES = 6;
+  var HOLD_TAU = 0.55;   // 가만히 누르고만 있으면 이만큼의 시간 상수로 힘이 빠집니다
+  var HOLD_FLOOR = 0.22; // 다만 완전히 멈추지는 않습니다
+  var MAX_STEP = 0.05;
 
   function Sim() {
     this.pokes = [];
     this.nextId = 1;
-    this.jelly = 0.6;     // 말랑함 0~1 (클수록 물렁하고 느리게 돌아옴)
-    this.wobble = 0.45;   // 흔들림 0~1 (클수록 오래 출렁임)
-    this.squash = { value: 0, vel: 0, target: 0 };
+    this.jelly = 0.6;    // 말랑함 — 얼마나 빨리 뭉개지는지
+    this.wobble = 0.45;  // 흔들림 — 가만히 있을 때의 숨쉬기 폭
     this.time = 0;
-    this._buf = new Float32Array(MAX_POKES * 4);
+    this.motion = 0;     // 이번 프레임에 실제로 일어난 변형량(소리·파츠용)
+    this.drag = 0;       // 그중 문지르기 성분
+    this._A = new Float32Array(MAX_POKES * 4); // u, v, 반지름, 누름량
+    this._B = new Float32Array(MAX_POKES * 4); // 끌기x, 끌기y, 소용돌이, 위상
   }
 
-  Sim.prototype.stiffness = function () { return 320 - 220 * this.jelly; };
+  Sim.prototype.pressRate = function () { return 0.30 + this.jelly * 0.50; };
 
-  Sim.prototype.poke = function (u, v, strength, radius) {
-    if (this.pokes.length >= MAX_POKES) {
-      // 가장 약해진 것부터 밀어냅니다.
-      var weakest = 0;
-      for (var i = 1; i < this.pokes.length; i++) {
-        if (Math.abs(this.pokes[i].value) < Math.abs(this.pokes[weakest].value)) weakest = i;
-      }
-      this.pokes.splice(weakest, 1);
-    }
+  /* 방사 성분은 아주 약하게만 씁니다.
+   * 순수 방사 변형은 발산이 0이 아니라서, 같은 자리를 계속 누르면 그 지점의 색이
+   * 원판처럼 부풀어 화면을 덮어버립니다. 실제 반죽에서 색이 섞이는 건 소용돌이와
+   * 밀어내기(전단) 때문이므로 그쪽을 주력으로 씁니다. */
+  var RADIAL = 0.16;
+
+  Sim.prototype.poke = function (u, v, radius) {
+    if (this.pokes.length >= MAX_POKES) this.pokes.shift();
     var p = {
       id: this.nextId++,
-      u: u, v: v,
-      target: strength,
-      value: strength * 0.35,   // 첫 프레임부터 눌린 느낌이 나도록 살짝 밀어줍니다.
-      vel: strength * 6,
+      u: u, v: v, tu: u, tv: v,
       radius: radius,
-      press: 1,
+      energy: 1,
+      pressAmt: 0, dragX: 0, dragY: 0,
+      swirl: (Math.random() < 0.5 ? -1 : 1) * (0.72 + Math.random() * 0.5),
+      phase: Math.random() * 6.28318,
       held: true
     };
     this.pokes.push(p);
@@ -1501,92 +1598,102 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     return null;
   };
 
-  Sim.prototype.move = function (id, u, v, strength) {
+  /** 손가락의 새 목표 위치. 실제 이동은 step 에서 프레임 단위로 처리합니다. */
+  Sim.prototype.move = function (id, u, v) {
     var p = this.find(id);
-    if (!p) return;
-    // 손가락을 따라가되 약간 끌리게 — 늘어나는 느낌
-    p.u += (u - p.u) * 0.42;
-    p.v += (v - p.v) * 0.42;
-    if (strength != null) p.target = strength;
+    if (p) { p.tu = u; p.tv = v; }
   };
 
   Sim.prototype.release = function (id) {
-    var p = this.find(id);
-    if (!p) return 0;
-    p.held = false;
-    p.target = 0;
-    var e = Math.abs(p.value);
-    // 손을 떼는 순간 반대로 튕겨 나가게 해서 되돌아오는 출렁임을 만듭니다.
-    p.vel += p.value * -9 * (0.5 + this.wobble);
-    return e;
-  };
-
-  Sim.prototype.releaseAll = function () {
-    for (var i = 0; i < this.pokes.length; i++) if (this.pokes[i].held) this.release(this.pokes[i].id);
-  };
-
-  Sim.prototype.heldCount = function () {
-    var n = 0;
-    for (var i = 0; i < this.pokes.length; i++) if (this.pokes[i].held) n++;
-    return n;
-  };
-
-  function integrate(o, k, c, dt) {
-    // 세미-임플리시트 오일러. dt 를 잘게 나눠 큰 프레임 드랍에도 터지지 않게 합니다.
-    var steps = Math.min(8, Math.max(1, Math.ceil(dt / 0.008)));
-    var h = dt / steps;
-    for (var i = 0; i < steps; i++) {
-      var a = k * (o.target - o.value) - c * o.vel;
-      o.vel += a * h;
-      o.value += o.vel * h;
+    for (var i = 0; i < this.pokes.length; i++) {
+      if (this.pokes[i].id === id) { this.pokes.splice(i, 1); return true; }
     }
-  }
+    return false;
+  };
+
+  Sim.prototype.releaseAll = function () { this.pokes.length = 0; };
+  Sim.prototype.active = function () { return this.pokes.length > 0; };
 
   Sim.prototype.step = function (dt) {
-    dt = Math.min(dt, 0.05);
+    dt = Math.min(dt, MAX_STEP);
     this.time += dt;
+    this.motion = 0;
+    this.drag = 0;
 
-    var k = this.stiffness();
-    var critical = 2 * Math.sqrt(k);
-    var heldDamp = critical * 1.05;                        // 누르는 동안엔 출렁이지 않게
-    var freeDamp = critical * (0.36 - 0.24 * this.wobble); // 뗀 뒤엔 오래 출렁이게
+    var rate = this.pressRate();
 
-    var held = 0;
-    for (var i = this.pokes.length - 1; i >= 0; i--) {
+    for (var i = 0; i < this.pokes.length; i++) {
       var p = this.pokes[i];
-      integrate(p, k, p.held ? heldDamp : freeDamp, dt);
-      if (p.held) held += p.press;
-      else if (Math.abs(p.value) < 0.0006 && Math.abs(p.vel) < 0.012) {
-        this.pokes.splice(i, 1);
+
+      // 손가락 이동 — 조금 끌리게 따라갑니다.
+      var mx = (p.tu - p.u) * 0.55;
+      var my = (p.tv - p.v) * 0.55;
+      p.u += mx; p.v += my;
+
+      var speed = Math.sqrt(mx * mx + my * my);
+
+      // 움직이면 힘이 되살아나고, 가만히 있으면 서서히 빠집니다.
+      // 가만히 누르고만 있어도 아주 느리게는 계속 뭉개집니다.
+      // 문지르면 힘이 되살아나므로, 주무를수록 훨씬 빨리 무너집니다.
+      p.energy = Math.max(HOLD_FLOOR, p.energy * Math.exp(-dt / HOLD_TAU));
+      p.energy = Math.min(1, p.energy + Math.min(speed * 22, 1) * 0.85);
+
+      p.pressAmt = rate * dt * p.energy;
+
+      // 끌기 성분 — 한 프레임에 너무 많이 밀리지 않게 잘라냅니다.
+      var cap = 0.055;
+      var s = Math.min(speed, cap);
+      var k = speed > 1e-6 ? (s / speed) * 0.92 : 0;
+      p.dragX = mx * k; p.dragY = my * k;
+
+      this.motion += p.pressAmt + s * 1.9;
+      this.drag += s;
+    }
+    return this.motion;
+  };
+
+  /** 셰이더용 uniform 두 벌 */
+  Sim.prototype.uniforms = function () {
+    var A = this._A, B = this._B;
+    for (var i = 0; i < MAX_POKES; i++) {
+      var p = this.pokes[i], o = i * 4;
+      if (p) {
+        A[o] = p.u; A[o + 1] = p.v; A[o + 2] = Math.max(p.radius, 0.001); A[o + 3] = p.pressAmt;
+        B[o] = p.dragX; B[o + 1] = p.dragY; B[o + 2] = p.swirl; B[o + 3] = p.phase;
+      } else {
+        A[o] = A[o + 1] = 0; A[o + 2] = 0.001; A[o + 3] = 0;
+        B[o] = B[o + 1] = B[o + 2] = B[o + 3] = 0;
       }
     }
-
-    this.squash.target = Math.min(1, held) * 0.55;
-    integrate(this.squash, k * 0.6, this.squash.target > 0 ? critical * 0.9 : critical * (0.30 - 0.2 * this.wobble), dt);
+    return { A: A, B: B };
   };
 
-  /** 셰이더로 넘길 vec4 배열 (u, v, 세기, 반지름) */
-  Sim.prototype.uniforms = function () {
-    var b = this._buf;
-    for (var i = 0; i < MAX_POKES; i++) {
+  /**
+   * 같은 변형장을 CPU 에서 계산합니다. 파츠(고체)는 이 값만큼 자리를 옮기고
+   * 모양은 그대로 둡니다. 셰이더의 disp() 와 부호·스케일이 일치해야 합니다.
+   */
+  Sim.prototype.displaceAt = function (u, v, out) {
+    var dx = 0, dy = 0;
+    for (var i = 0; i < this.pokes.length; i++) {
       var p = this.pokes[i];
-      var o = i * 4;
-      if (p) { b[o] = p.u; b[o + 1] = p.v; b[o + 2] = p.value; b[o + 3] = p.radius; }
-      else { b[o] = b[o + 1] = b[o + 2] = 0; b[o + 3] = 0.001; }
+      var rx = u - p.u, ry = v - p.v, R = p.radius;
+      var x2 = (rx * rx + ry * ry) / (R * R);
+      if (x2 > 6.25) continue;
+      var ang = Math.atan2(ry, rx);
+      var w = Math.exp(-x2 * 1.5) * (0.78 + 0.22 * Math.sin(ang * 3 + p.phase));
+      // 소용돌이(발산 0) — 부풀리지 않고 섞기만 합니다. 셰이더 disp() 와 부호가 같아야 합니다.
+      dx += -ry / R * p.pressAmt * w * p.swirl;
+      dy += rx / R * p.pressAmt * w * p.swirl;
+      dx += rx / R * p.pressAmt * w * RADIAL + p.dragX * w;
+      dy += ry / R * p.pressAmt * w * RADIAL + p.dragY * w;
     }
-    return b;
+    out[0] = dx; out[1] = dy;
+    return out;
   };
 
-  Sim.prototype.count = function () { return Math.min(this.pokes.length, MAX_POKES); };
-
-  /** 아무도 안 만질 때의 아주 느린 숨쉬기 */
-  Sim.prototype.idle = function () {
-    return Math.sin(this.time * 1.15) * 0.5 + Math.sin(this.time * 0.61 + 1.7) * 0.5;
-  };
-
-  Sim.prototype.isResting = function () {
-    if (this.pokes.length) return false;
-    return Math.abs(this.squash.value) < 0.0008 && Math.abs(this.squash.vel) < 0.01;
+  /** 아무도 안 만질 때의 아주 느린 숨쉬기 (전체 균일 스케일) */
+  Sim.prototype.breath = function () {
+    return (Math.sin(this.time * 1.05) * 0.6 + Math.sin(this.time * 0.63 + 1.7) * 0.4) * this.wobble;
   };
 
   global.CS = global.CS || {};
@@ -1595,37 +1702,86 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
 
 /* ===== src/gl.js ===== */
 /* 크런치 슬라임 — WebGL 렌더러
- * 캐릭터 텍스처와 파츠 레이어를 같은 변형 필드로 밀고 당겨서
- * 하나의 젤리 덩어리처럼 보이게 만듭니다.
+ *
+ * 두 가지를 나눠서 그립니다.
+ *
+ *  본체(슬라임)  ping-pong 프레임버퍼에 담긴 텍스처를 매 프레임 조금씩 warp 해서
+ *                덮어씁니다. 변형이 텍스처 자체에 쌓이므로 손을 떼도 돌아오지 않고,
+ *                계속 주무르면 색이 이웃 픽셀로 끌려가 점토처럼 섞입니다.
+ *
+ *  파츠          고체라서 뭉개지면 안 되므로 본체 텍스처에 섞지 않습니다.
+ *                스프라이트 아틀라스에서 쿼드로 따로 그리고, 위치와 회전만 옮깁니다.
  */
 (function (global) {
   'use strict';
 
-  var VERT = [
+  var MAX_POKES = 6;
+
+  /* ------------------------------------------------------------------ */
+  /* 셰이더                                                              */
+  /* ------------------------------------------------------------------ */
+
+  var VERT_FULL = [
     'attribute vec2 aPos;',
     'varying vec2 vUv;',
+    'void main(){ vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }'
+  ].join('\n');
+
+  var FRAG_COPY = [
+    'precision highp float;',
+    'varying vec2 vUv;',
+    'uniform sampler2D uSrc;',
+    'void main(){ gl_FragColor = texture2D(uSrc, vUv); }'
+  ].join('\n');
+
+  // 반죽 패스 — 이전 상태를 조금 밀어서 새 상태로 덮어씁니다.
+  var FRAG_KNEAD = [
+    'precision highp float;',
+    'varying vec2 vUv;',
+    'uniform sampler2D uSrc;',
+    'uniform vec4 uA[6];',   // u, v, 반지름, 누름량
+    'uniform vec4 uB[6];',   // 끌기x, 끌기y, 소용돌이, 위상
+    'uniform float uFirm;',  // 실루엣을 다시 세우는 정도
+    '',
+    'vec2 disp(vec2 uv){',
+    '  vec2 d = vec2(0.0);',
+    '  for(int i = 0; i < 6; i++){',
+    '    if(uA[i].z < 0.002) continue;',
+    '    vec2 rel = uv - uA[i].xy;',
+    '    float R = uA[i].z;',
+    '    float x2 = dot(rel, rel) / (R * R);',
+    '    if(x2 > 6.25) continue;',
+    '    float ang = atan(rel.y, rel.x);',
+    // 완벽한 동심원이 되지 않도록 각도로 세기를 흔들어 줍니다.
+    '    float w = exp(-x2 * 1.5) * (0.78 + 0.22 * sin(ang * 3.0 + uB[i].w));',
+    '    vec2 nrel = rel / R;',
+    // 소용돌이 — 발산이 0이라 색을 부풀리지 않고 섞기만 합니다(반죽의 핵심).
+    '    d -= vec2(-nrel.y, nrel.x) * uA[i].w * w * uB[i].z;',
+    '    d -= nrel * uA[i].w * w * 0.16;',    // 아주 약한 퍼짐 — 누르는 촉감
+    '    d -= uB[i].xy * w;',                 // 끌기 — 손가락 간 방향으로 끌려갑니다
+    '  }',
+    '  return d;',
+    '}',
+    '',
     'void main(){',
-    '  vUv = aPos * 0.5 + 0.5;',
-    '  gl_Position = vec4(aPos, 0.0, 1.0);',
+    '  vec4 c = texture2D(uSrc, clamp(vUv + disp(vUv), 0.0, 1.0));',
+    // 알파까지 계속 번지면 실루엣이 안개처럼 사라지므로 아주 약하게 다시 세웁니다.
+    '  float a = clamp((c.a - 0.5) * uFirm + 0.5, 0.0, 1.0);',
+    '  vec3 rgb = c.a > 0.002 ? c.rgb * (a / c.a) : vec3(0.0);',
+    '  gl_FragColor = vec4(rgb, a);',
     '}'
   ].join('\n');
 
-  var FRAG = [
+  var FRAG_BODY = [
     'precision highp float;',
     'varying vec2 vUv;',
     'uniform sampler2D uBody;',
-    'uniform sampler2D uMix;',
-    'uniform vec4  uPokes[6];',    // xy = 위치, z = 세기, w = 반지름
     'uniform vec2  uFit;',
-    'uniform float uSquash;',
-    'uniform float uTime;',
-    'uniform float uWobble;',
+    'uniform float uBreath;',
     'uniform float uGloss;',
     'uniform float uRim;',
     'uniform vec3  uTint;',
     'uniform float uTintAmt;',
-    'uniform float uDepth;',
-    'uniform float uHasMix;',
     'uniform float uTexel;',
     'uniform float uShadow;',
     '',
@@ -1634,7 +1790,6 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     '  return texture2D(uBody, p).a;',
     '}',
     '',
-    // 링 모양으로 알파를 훑어서 "이 지점이 덩어리 안쪽 얼마나 깊은가"를 구합니다.
     'float thickAt(vec2 p, float r){',
     '  float s = 0.0;',
     '  for(int i = 0; i < 10; i++){',
@@ -1645,54 +1800,22 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     '  return s * 0.1;',
     '}',
     '',
-    'vec2 displace(vec2 uv){',
-    '  vec2 d = vec2(0.0);',
-    '  for(int i = 0; i < 6; i++){',
-    '    vec4 pk = uPokes[i];',
-    '    if(abs(pk.z) < 0.0004) continue;',
-    '    vec2 rel = uv - pk.xy;',
-    '    float r = length(rel);',
-    '    float R = max(pk.w, 0.001);',
-    '    float x = r / R;',
-    '    if(x > 2.6) continue;',
-    '    float w = exp(-x * x * 1.45);',
-    '    vec2 dir = r > 0.00001 ? rel / r : vec2(0.0);',
-    '    d += dir * pk.z * w * x * 2.35;',   // 눌린 자리를 둘러싼 찌그러짐
-    '    d += rel * pk.z * w * 0.70;',       // 안쪽으로 빨려드는 느낌
-    '  }',
-    '  return d;',
-    '}',
-    '',
-    'vec2 warp(vec2 uv){',
-    '  vec2 p = uv;',
-    '  vec2 sq = vec2(1.0 / (1.0 + uSquash * 0.34), 1.0 / max(0.25, 1.0 - uSquash * 0.28));',
-    '  p = 0.5 + (p - 0.5) * sq;',
-    '  float amp = uWobble * 0.0075;',
-    '  p += vec2(sin(p.y * 13.0 + uTime * 4.9), cos(p.x * 11.0 + uTime * 3.7)) * amp;',
-    '  p += displace(p);',
-    '  return p;',
-    '}',
-    '',
     'void main(){',
     '  vec2 base = (vUv - 0.5) * uFit + 0.5;',
     '  base.y = 1.0 - base.y;',
-    '  vec2 uv = warp(base);',
+    '  vec2 uv = 0.5 + (base - 0.5) * (1.0 - uBreath * 0.012);',
     '',
     '  float a = bodyA(uv);',
     '',
-    // 그림자를 먼저 — 본체가 없는 곳에서도 필요합니다.
     '  float sh = 0.0;',
     '  if(uShadow > 0.001){',
-    '    vec2 back = uv - vec2(0.016, 0.024);',   // 오른쪽 아래로 드리웁니다
-    '    sh = smoothstep(0.06, 0.72, thickAt(back, uTexel * 30.0)) * uShadow;',
+    '    sh = smoothstep(0.06, 0.72, thickAt(uv - vec2(0.016, 0.024), uTexel * 30.0)) * uShadow;',
     '  }',
     '  if(a < 0.004 && sh < 0.004){ gl_FragColor = vec4(0.0); return; }',
     '',
-    // 덩어리의 두께감 — 젤리 볼륨의 핵심
     '  float tkRaw = thickAt(uv, uTexel * 24.0) * 0.62 + thickAt(uv, uTexel * 9.0) * 0.38;',
     '  float tk = smoothstep(0.06, 0.86, tkRaw * 0.72 + a * 0.28);',
     '',
-    // 실루엣 기울기로 만든 가짜 법선 — 넓게 + 좁게 두 번 보고 섞습니다.
     '  float e1 = uTexel * 15.0, e2 = uTexel * 5.0;',
     '  float gx = (bodyA(uv - vec2(e1, 0.0)) - bodyA(uv + vec2(e1, 0.0))) * 0.62',
     '           + (bodyA(uv - vec2(e2, 0.0)) - bodyA(uv + vec2(e2, 0.0))) * 0.38;',
@@ -1701,109 +1824,154 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     '  vec3 N = normalize(vec3(gx * 3.1, -gy * 3.1, 0.72));',
     '',
     '  vec4 bodyC = texture2D(uBody, clamp(uv, 0.0, 1.0));',
-    '  vec3 col = bodyC.a > 0.001 ? bodyC.rgb / max(bodyC.a, 0.001) : bodyC.rgb;',
-    '',
-    // 파츠 레이어 — 살짝 다르게 흘러서 "슬라임 속에 떠 있는" 느낌
-    '  if(uHasMix > 0.5){',
-    '    vec2 muv = 0.5 + (uv - 0.5) * (1.0 + uDepth * 0.05) + displace(uv) * uDepth * 0.45;',
-    '    vec4 mc = texture2D(uMix, clamp(muv, 0.0, 1.0));',
-    '    vec3 mrgb = mc.a > 0.001 ? mc.rgb / max(mc.a, 0.001) : mc.rgb;',
-    '    float sink = uDepth * 0.55;',                   // 깊을수록 슬라임 색에 잠깁니다
-    '    mrgb = mix(mrgb, uTint * 0.94, sink * 0.30 + uTintAmt * 0.45);',
-    '    mrgb = mix(mrgb, vec3(dot(mrgb, vec3(0.33))), sink * 0.10);',
-    '    col = mix(col, mrgb, mc.a * (0.95 - sink * 0.30) * step(0.02, a));',
-    '  }',
-    '',
+    '  vec3 col = bodyC.a > 0.002 ? bodyC.rgb / bodyC.a : bodyC.rgb;',
     '  col = mix(col, uTint, uTintAmt);',
     '',
-    // 두께 음영: 가장자리는 진하고 어둡게, 안쪽은 환하게
     '  col *= mix(0.70, 1.07, tk);',
     '  col = mix(col, uTint * 0.90, (1.0 - tk) * uRim * 0.80);',
-    '',
-    // 아래쪽에서 올라오는 반사광
     '  col += uTint * smoothstep(0.42, 0.98, uv.y) * tk * uGloss * 0.13;',
     '',
-    // 젤리 하이라이트
     '  vec3 L = normalize(vec3(-0.44, 0.60, 0.67));',
     '  vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));',
-    '  float spec = pow(max(dot(N, H), 0.0), mix(9.0, 62.0, uGloss)) * uGloss * 1.75;',
-    '  col += vec3(spec);',
-    '',
-    // 위쪽에 넓게 앉는 광택 한 덩어리
-    '  float sheen = smoothstep(0.58, 0.02, uv.y) * tk * uGloss * 0.22;',
-    '  col += vec3(sheen);',
+    '  col += vec3(pow(max(dot(N, H), 0.0), mix(9.0, 62.0, uGloss)) * uGloss * 1.75);',
+    '  col += vec3(smoothstep(0.58, 0.02, uv.y) * tk * uGloss * 0.22);',
     '',
     '  float outA = a + sh * (1.0 - a);',
-    '  vec3 shadowCol = vec3(0.30, 0.24, 0.30);',
-    '  vec3 outRgb = col * a + shadowCol * (sh * (1.0 - a));',
-    '  gl_FragColor = vec4(outRgb, outA);',
+    '  gl_FragColor = vec4(col * a + vec3(0.30, 0.24, 0.30) * (sh * (1.0 - a)), outA);',
     '}'
   ].join('\n');
 
+  var VERT_PARTS = [
+    'attribute vec2 aTex;',   // 본체 텍스처 좌표 (v 는 위 → 아래)
+    'attribute vec2 aAtlas;',
+    'uniform vec2 uFit;',
+    'uniform float uBreath;',
+    'varying vec2 vAtlas;',
+    'varying vec2 vTex;',
+    'void main(){',
+    '  vAtlas = aAtlas;',
+    '  vTex = aTex;',
+    '  vec2 t = 0.5 + (aTex - 0.5) / (1.0 - uBreath * 0.012);',
+    '  gl_Position = vec4((t.x - 0.5) * 2.0 / uFit.x, (0.5 - t.y) * 2.0 / uFit.y, 0.0, 1.0);',
+    '}'
+  ].join('\n');
+
+  var FRAG_PARTS = [
+    'precision highp float;',
+    'varying vec2 vAtlas;',
+    'varying vec2 vTex;',
+    'uniform sampler2D uAtlas;',
+    'uniform sampler2D uBody;',
+    'uniform vec3  uTint;',
+    'uniform float uTintAmt;',
+    'uniform float uDepth;',
+    'uniform float uGloss;',
+    'uniform float uTexel;',
+    'void main(){',
+    '  vec4 c = texture2D(uAtlas, vAtlas);',
+    '  if(c.a < 0.004) discard;',
+    '  float m = texture2D(uBody, clamp(vTex, 0.0, 1.0)).a;',
+    '  float vis = smoothstep(0.04, 0.30, m);',    // 슬라임이 남아 있는 곳에서만 보입니다
+    '  if(vis < 0.004) discard;',
+    '  vec3 rgb = c.rgb / max(c.a, 0.002);',
+    '  rgb = mix(rgb, uTint * 0.94, uDepth * 0.30 + uTintAmt * 0.45);',
+    '  rgb = mix(rgb, vec3(dot(rgb, vec3(0.3333))), uDepth * 0.10);',
+    // 본체와 같은 광택을 얹어 표면 아래에 잠긴 것처럼 보이게 합니다.
+    '  float e = uTexel * 13.0;',
+    '  float gx = texture2D(uBody, clamp(vTex - vec2(e, 0.0), 0.0, 1.0)).a',
+    '           - texture2D(uBody, clamp(vTex + vec2(e, 0.0), 0.0, 1.0)).a;',
+    '  float gy = texture2D(uBody, clamp(vTex - vec2(0.0, e), 0.0, 1.0)).a',
+    '           - texture2D(uBody, clamp(vTex + vec2(0.0, e), 0.0, 1.0)).a;',
+    '  vec3 N = normalize(vec3(gx * 3.0, -gy * 3.0, 0.72));',
+    '  vec3 H = normalize(normalize(vec3(-0.44, 0.60, 0.67)) + vec3(0.0, 0.0, 1.0));',
+    '  rgb += vec3(pow(max(dot(N, H), 0.0), mix(9.0, 62.0, uGloss)) * uGloss * 0.85);',
+    '  float a = c.a * vis * (0.96 - uDepth * 0.26);',
+    '  gl_FragColor = vec4(rgb * a, a);',
+    '}'
+  ].join('\n');
+
+  /* ------------------------------------------------------------------ */
+
   function compile(gl, type, src) {
     var s = gl.createShader(type);
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
+    gl.shaderSource(s, src); gl.compileShader(s);
     if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
       throw new Error('셰이더 컴파일 실패: ' + gl.getShaderInfoLog(s));
     }
     return s;
   }
 
+  function link(gl, vs, fs, attribs) {
+    var p = gl.createProgram();
+    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, fs));
+    attribs.forEach(function (name, i) { gl.bindAttribLocation(p, i, name); });
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      throw new Error('셰이더 링크 실패: ' + gl.getProgramInfoLog(p));
+    }
+    p.u = {};
+    var n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (var i = 0; i < n; i++) {
+      var info = gl.getActiveUniform(p, i);
+      var nm = info.name.replace(/\[0\]$/, '');
+      p.u[nm] = gl.getUniformLocation(p, info.name);
+    }
+    return p;
+  }
+
   function Renderer(canvas, opts) {
     opts = opts || {};
-    var attrs = { alpha: true, premultipliedAlpha: true, antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' };
-    var gl = canvas.getContext('webgl2', attrs) || canvas.getContext('webgl', attrs) || canvas.getContext('experimental-webgl', attrs);
+    var attrs = {
+      alpha: true, premultipliedAlpha: true, antialias: true,
+      preserveDrawingBuffer: true, powerPreference: 'high-performance'
+    };
+    var gl = canvas.getContext('webgl2', attrs) || canvas.getContext('webgl', attrs) ||
+             canvas.getContext('experimental-webgl', attrs);
     if (!gl) throw new Error('이 브라우저에서는 WebGL을 쓸 수 없어요.');
 
     this.canvas = canvas;
     this.gl = gl;
     this.dprCap = opts.dprCap || 2;
+    this.simCap = opts.simCap || 1024;
 
-    var prog = gl.createProgram();
-    gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, VERT));
-    gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, FRAG));
-    gl.bindAttribLocation(prog, 0, 'aPos');
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      throw new Error('셰이더 링크 실패: ' + gl.getProgramInfoLog(prog));
-    }
-    this.prog = prog;
-    gl.useProgram(prog);
+    this.pCopy  = link(gl, VERT_FULL, FRAG_COPY,  ['aPos']);
+    this.pKnead = link(gl, VERT_FULL, FRAG_KNEAD, ['aPos']);
+    this.pBody  = link(gl, VERT_FULL, FRAG_BODY,  ['aPos']);
+    this.pParts = link(gl, VERT_PARTS, FRAG_PARTS, ['aTex', 'aAtlas']);
 
-    var buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    this.quad = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-    this.u = {};
-    ['uBody', 'uMix', 'uPokes', 'uFit', 'uSquash', 'uTime', 'uWobble', 'uGloss',
-     'uRim', 'uTint', 'uTintAmt', 'uDepth', 'uHasMix', 'uTexel', 'uShadow'
-    ].forEach(function (n) { this.u[n] = gl.getUniformLocation(prog, n); }, this);
+    this.partBuf = gl.createBuffer();
+    this.partCount = 0;
 
-    this.texBody = this._makeTex();
-    this.texMix = this._makeTex();
-    this.texSize = 512;
-    this.hasMix = 0;
+    this.texOrig = this._tex();
+    this.texAtlas = this._tex();
+    this.hasAtlas = false;
+    this.simSize = 0;
+    this.fb = [null, null];
+    this.tex = [null, null];
+    this.cur = 0;
+    this.hasBody = false;
 
-    gl.uniform1i(this.u.uBody, 0);
-    gl.uniform1i(this.u.uMix, 1);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.texBody);
-    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.texMix);
+    this.maskSize = 96;
+    this.maskFb = null; this.maskTex = null;
+    this.maskPixels = new Uint8Array(this.maskSize * this.maskSize * 4);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     this.params = {
       gloss: 0.55, rim: 0.4, tint: [0.55, 0.91, 1.0], tintAmt: 0.18,
-      depth: 0.55, wobble: 0.45, zoom: 0.88, shadow: 0.2,
+      depth: 0.55, zoom: 0.88, shadow: 0.2, firm: 1.028,
       bg: [0.99, 0.95, 0.97, 1]
     };
     this.resize();
   }
 
-  Renderer.prototype._makeTex = function () {
+  Renderer.prototype._tex = function (w, h) {
     var gl = this.gl;
     var t = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, t);
@@ -1811,32 +1979,156 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+    if (w) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
     return t;
   };
 
-  Renderer.prototype._upload = function (tex, source) {
+  Renderer.prototype._target = function (size) {
     var gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, tex);
+    var t = this._tex(size, size);
+    var f = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+      throw new Error('프레임버퍼를 만들지 못했어요.');
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { fb: f, tex: t };
+  };
+
+  Renderer.prototype._fullscreen = function (prog) {
+    var gl = this.gl;
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
+    gl.enableVertexAttribArray(0);
+    gl.disableVertexAttribArray(1);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
+
+  /** 원본 이미지를 올리고 반죽 버퍼를 새로 만듭니다. */
+  Renderer.prototype.setBody = function (source) {
+    var gl = this.gl;
+    var size = Math.min(source.width || 512, this.simCap);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.texOrig);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+
+    if (this.simSize !== size) {
+      for (var i = 0; i < 2; i++) {
+        if (this.fb[i]) { gl.deleteFramebuffer(this.fb[i]); gl.deleteTexture(this.tex[i]); }
+        var t = this._target(size);
+        this.fb[i] = t.fb; this.tex[i] = t.tex;
+      }
+      if (!this.maskFb) {
+        var m = this._target(this.maskSize);
+        this.maskFb = m.fb; this.maskTex = m.tex;
+      }
+      this.simSize = size;
+    }
+    this.hasBody = true;
+    this.reset();
   };
 
-  Renderer.prototype.setBody = function (source) {
-    this.gl.activeTexture(this.gl.TEXTURE0);
-    this._upload(this.texBody, source);
-    this.texSize = source.width || 512;
+  /** 반죽을 원래 모습으로 되돌립니다. */
+  Renderer.prototype.reset = function () {
+    if (!this.hasBody) return;
+    var gl = this.gl;
+    gl.disable(gl.BLEND);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb[0]);
+    gl.viewport(0, 0, this.simSize, this.simSize);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(this.pCopy);
+    gl.uniform1i(this.pCopy.u.uSrc, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.texOrig);
+    this._fullscreen(this.pCopy);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.enable(gl.BLEND);
+    this.cur = 0;
+    this._restoreViewport();
   };
 
-  Renderer.prototype.setMix = function (source) {
-    this.gl.activeTexture(this.gl.TEXTURE1);
-    if (source) { this._upload(this.texMix, source); this.hasMix = 1; }
-    else { this.hasMix = 0; }
+  /** 한 프레임 분량의 변형을 텍스처에 영구히 새깁니다. */
+  Renderer.prototype.knead = function (sim) {
+    if (!this.hasBody || !sim.active()) return false;
+    var gl = this.gl;
+    var u = sim.uniforms();
+    var next = 1 - this.cur;
+
+    gl.disable(gl.BLEND);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb[next]);
+    gl.viewport(0, 0, this.simSize, this.simSize);
+    gl.useProgram(this.pKnead);
+    gl.uniform1i(this.pKnead.u.uSrc, 0);
+    gl.uniform4fv(this.pKnead.u.uA, u.A);
+    gl.uniform4fv(this.pKnead.u.uB, u.B);
+    gl.uniform1f(this.pKnead.u.uFirm, this.params.firm);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex[this.cur]);
+    this._fullscreen(this.pKnead);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.enable(gl.BLEND);
+
+    this.cur = next;
+    this._restoreViewport();
+    return true;
+  };
+
+  /** 지금 상태의 알파를 작게 읽어옵니다(어디를 눌렀는지 판정용). */
+  Renderer.prototype.readMask = function () {
+    if (!this.hasBody || !this.maskFb) return null;
+    var gl = this.gl, n = this.maskSize;
+    gl.disable(gl.BLEND);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.maskFb);
+    gl.viewport(0, 0, n, n);
+    gl.useProgram(this.pCopy);
+    gl.uniform1i(this.pCopy.u.uSrc, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex[this.cur]);
+    this._fullscreen(this.pCopy);
+    gl.readPixels(0, 0, n, n, gl.RGBA, gl.UNSIGNED_BYTE, this.maskPixels);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.enable(gl.BLEND);
+    this._restoreViewport();
+
+    var out = new Uint8Array(n * n);
+    for (var y = 0; y < n; y++) {
+      for (var x = 0; x < n; x++) {
+        // readPixels 는 아래에서 위로 읽으므로 뒤집습니다.
+        out[y * n + x] = this.maskPixels[((n - 1 - y) * n + x) * 4 + 3];
+      }
+    }
+    return { data: out, w: n, h: n };
+  };
+
+  Renderer.prototype.setPartAtlas = function (canvas) {
+    var gl = this.gl;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.texAtlas);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+    this.hasAtlas = true;
+  };
+
+  /** [tx, ty, ax, ay] × 6정점 × 파츠수 */
+  Renderer.prototype.setPartGeometry = function (data, count) {
+    var gl = this.gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.partBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    this.partCount = count;
   };
 
   Renderer.prototype.setParams = function (p) {
     for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) this.params[k] = p[k];
+  };
+
+  Renderer.prototype._restoreViewport = function () {
+    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   };
 
   Renderer.prototype.resize = function () {
@@ -1844,17 +2136,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     var dpr = Math.min(global.devicePixelRatio || 1, this.dprCap);
     var w = Math.max(1, Math.round((cv.clientWidth || 400) * dpr));
     var h = Math.max(1, Math.round((cv.clientHeight || 400) * dpr));
-    if (cv.width !== w || cv.height !== h) {
-      cv.width = w; cv.height = h;
-    }
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
     this.gl.viewport(0, 0, w, h);
     return { w: w, h: h };
-  };
-
-  /** 화면 좌표(0~1) → 이미지 텍스처 좌표(0~1). 어디를 눌렀는지 알아내는 데 씁니다. */
-  Renderer.prototype.screenToTex = function (nx, ny) {
-    var f = this._fit();
-    return { u: (nx - 0.5) * f[0] + 0.5, v: (ny - 0.5) * f[1] + 0.5 };
   };
 
   Renderer.prototype._fit = function () {
@@ -1864,32 +2148,68 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     return ar >= 1 ? [ar / z, 1 / z] : [1 / z, (1 / ar) / z];
   };
 
+  Renderer.prototype.screenToTex = function (nx, ny) {
+    var f = this._fit();
+    return { u: (nx - 0.5) * f[0] + 0.5, v: (ny - 0.5) * f[1] + 0.5 };
+  };
+
   Renderer.prototype.render = function (sim) {
-    var gl = this.gl, u = this.u, p = this.params;
-    var bg = p.bg;
+    var gl = this.gl, p = this.params, bg = p.bg;
     gl.clearColor(bg[0] * bg[3], bg[1] * bg[3], bg[2] * bg[3], bg[3]);
     gl.clear(gl.COLOR_BUFFER_BIT);
+    if (!this.hasBody) return;
 
     var f = this._fit();
-    gl.uniform2f(u.uFit, f[0], f[1]);
-    gl.uniform4fv(u.uPokes, sim.uniforms());
-    gl.uniform1f(u.uSquash, sim.squash.value);
-    gl.uniform1f(u.uTime, sim.time);
-    gl.uniform1f(u.uWobble, p.wobble * (0.35 + 0.65 * Math.abs(sim.idle())));
-    gl.uniform1f(u.uGloss, p.gloss);
-    gl.uniform1f(u.uRim, p.rim);
-    gl.uniform3f(u.uTint, p.tint[0], p.tint[1], p.tint[2]);
-    gl.uniform1f(u.uTintAmt, p.tintAmt);
-    gl.uniform1f(u.uDepth, p.depth);
-    gl.uniform1f(u.uHasMix, this.hasMix);
-    gl.uniform1f(u.uTexel, 1 / this.texSize);
-    gl.uniform1f(u.uShadow, p.shadow);
+    var breath = sim.breath();
+    var texel = 1 / this.simSize;
 
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    // 본체
+    var b = this.pBody;
+    gl.useProgram(b);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex[this.cur]);
+    gl.uniform1i(b.u.uBody, 0);
+    gl.uniform2f(b.u.uFit, f[0], f[1]);
+    gl.uniform1f(b.u.uBreath, breath);
+    gl.uniform1f(b.u.uGloss, p.gloss);
+    gl.uniform1f(b.u.uRim, p.rim);
+    gl.uniform3f(b.u.uTint, p.tint[0], p.tint[1], p.tint[2]);
+    gl.uniform1f(b.u.uTintAmt, p.tintAmt);
+    gl.uniform1f(b.u.uTexel, texel);
+    gl.uniform1f(b.u.uShadow, p.shadow);
+    this._fullscreen(b);
+
+    // 파츠
+    if (this.partCount > 0 && this.hasAtlas) {
+      var q = this.pParts;
+      gl.useProgram(q);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.texAtlas);
+      gl.uniform1i(q.u.uAtlas, 1);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.tex[this.cur]);
+      gl.uniform1i(q.u.uBody, 0);
+      gl.uniform2f(q.u.uFit, f[0], f[1]);
+      gl.uniform1f(q.u.uBreath, breath);
+      gl.uniform3f(q.u.uTint, p.tint[0], p.tint[1], p.tint[2]);
+      gl.uniform1f(q.u.uTintAmt, p.tintAmt);
+      gl.uniform1f(q.u.uDepth, p.depth);
+      gl.uniform1f(q.u.uGloss, p.gloss);
+      gl.uniform1f(q.u.uTexel, texel);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.partBuf);
+      gl.enableVertexAttribArray(0);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+      gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+      gl.drawArrays(gl.TRIANGLES, 0, this.partCount * 6);
+      gl.disableVertexAttribArray(1);
+    }
   };
 
   global.CS = global.CS || {};
   global.CS.Renderer = {
+    MAX_POKES: MAX_POKES,
     create: function (canvas, opts) { return new Renderer(canvas, opts); }
   };
 })(window);
@@ -2004,23 +2324,16 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   /* 슬라임 본체                                                          */
   /* ------------------------------------------------------------------ */
   var renderer = null, sim = Physics.create();
-  var body = null;        // { canvas, mask }
-  var alphaMap = null;    // { data:Uint8Array, w, h } — 어디를 눌렀는지 판정용
-  var mixCanvas = null;
-  var pointers = {};      // pointerId → { pokeId, lastX, lastY, t }
+  var body = null;        // { canvas, mask } — 원본 기준
+  var alphaMap = null;    // 지금 뭉개진 상태의 알파(어디를 눌렀는지 판정용)
+  var atlas = null;       // 파츠 스프라이트 시트
+  var instances = [];     // 슬라임에 박힌 파츠들 — 고체라 위치·회전만 바뀝니다
+  var geom = null;        // 파츠 정점 버퍼
+  var pointers = {};      // pointerId → { pokeId, x, y }
   var hasImage = false;
+  var kneaded = 0;        // 지금까지 얼마나 주물렀는지(0~1 대략)
 
-  function buildAlphaMap(cv) {
-    var w = 128, h = 128;
-    var t = document.createElement('canvas');
-    t.width = w; t.height = h;
-    var c = t.getContext('2d', { willReadFrequently: true });
-    c.drawImage(cv, 0, 0, w, h);
-    var d = c.getImageData(0, 0, w, h).data;
-    var out = new Uint8Array(w * h);
-    for (var i = 0; i < w * h; i++) out[i] = d[i * 4 + 3];
-    return { data: out, w: w, h: h };
-  }
+  var QUAD_FILL = 0.68;   // 아틀라스 타일에서 파츠가 실제로 차지하는 비율
 
   function alphaAt(u, v) {
     if (!alphaMap || u < 0 || v < 0 || u > 1 || v > 1) return 0;
@@ -2029,84 +2342,148 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     return alphaMap.data[y * alphaMap.w + x];
   }
 
-  /** 활성 파츠를 마스크 안쪽에 흩뿌려 파츠 레이어를 만듭니다. */
-  function buildMixLayer() {
-    if (!body) return;
-    var side = body.canvas.width;
-    if (!mixCanvas) mixCanvas = document.createElement('canvas');
-    mixCanvas.width = mixCanvas.height = side;
-    var ctx = mixCanvas.getContext('2d');
-    ctx.clearRect(0, 0, side, side);
+  function refreshMask() {
+    var m = renderer.readMask();
+    if (m) alphaMap = m;
+  }
+
+  /** 활성 파츠를 실루엣 안쪽에 흩뿌립니다. 위치는 여기서 한 번만 정해집니다. */
+  function rebuildParts() {
+    instances = [];
+    if (!body) { renderer.setPartGeometry(new Float32Array(0), 0); return; }
 
     var ids = S.parts.filter(function (id) { return !!Parts.byId(id); });
-    if (!ids.length || S.count <= 0) { renderer.setMix(null); return; }
-
     var pts = body.mask.points;
-    if (!pts.length) { renderer.setMix(null); return; }
+    if (!ids.length || S.count <= 0 || !pts.length) {
+      renderer.setPartGeometry(new Float32Array(0), 0);
+      updateGeometry();
+      return;
+    }
 
     var rand = rng(S.seed);
-    var base = side * 0.042 * S.size;
+    var base = 0.042 * S.size;       // 텍스처 uv 단위 반지름
     var placed = [];
 
     for (var i = 0; i < S.count; i++) {
-      var id = ids[Math.floor(rand() * ids.length)];
-      var tries = 0, pt = null, r = base * (0.72 + rand() * 0.66);
-      // 서로 심하게 겹치지 않도록 몇 번 다시 뽑습니다.
+      var part = Parts.byId(ids[Math.floor(rand() * ids.length)]);
+      var r = base * (0.72 + rand() * 0.66) * (part.ratio || 1);
+      var spot = null, tries = 0;
       while (tries++ < 22) {
         var cand = pts[Math.floor(rand() * pts.length)];
-        // 깊은 곳일수록 큰 파츠가 들어갈 수 있습니다.
-        var room = (cand.depth / body.mask.maxDepth);
+        var room = cand.depth / body.mask.maxDepth;
         if (room < 0.12) continue;
         // 퍼짐이 낮으면 가장자리 쪽을 더 자주 고릅니다(가운데 얼굴을 덜 가리게).
         var dc = Math.sqrt(Math.pow(cand.u - 0.5, 2) + Math.pow(cand.v - 0.5, 2));
-        var accept = S.spread + (1 - S.spread) * clamp(dc / 0.40, 0, 1);
-        if (rand() > accept) continue;
-        var cx = cand.u * side, cy = cand.v * side;
+        if (rand() > S.spread + (1 - S.spread) * clamp(dc / 0.40, 0, 1)) continue;
         var ok = true;
         for (var j = 0; j < placed.length; j++) {
-          var dx = placed[j].x - cx, dy = placed[j].y - cy;
-          if (dx * dx + dy * dy < Math.pow((placed[j].r + r) * 0.82, 2)) { ok = false; break; }
+          var dx = placed[j].u - cand.u, dy = placed[j].v - cand.v;
+          if (dx * dx + dy * dy < Math.pow((placed[j].rr + r) * 0.85, 2)) { ok = false; break; }
         }
-        if (ok) { pt = { x: cx, y: cy, r: Math.min(r, base * 1.5 * (0.4 + room)) }; break; }
+        if (ok) { spot = cand; break; }
       }
-      if (!pt) continue;
-      placed.push(pt);
+      if (!spot) continue;
 
-      ctx.save();
-      ctx.translate(pt.x, pt.y);
-      ctx.globalAlpha = 0.88 + rand() * 0.12;
-      Parts.draw(ctx, id, pt.r, Math.floor(rand() * 8), (rand() - 0.5) * Math.PI * 2);
-      ctx.restore();
+      var rr = Math.min(r, base * 1.5 * (0.4 + spot.depth / body.mask.maxDepth));
+      placed.push({ u: spot.u, v: spot.v, rr: rr });
+      instances.push({
+        id: part.id,
+        ci: Math.floor(rand() * part.colors.length),
+        u: spot.u, v: spot.v,
+        r: rr / QUAD_FILL,
+        rot: (rand() - 0.5) * Math.PI * 2,
+        spinA: (rand() - 0.5) * 2,
+        spinB: (rand() - 0.5) * 2
+      });
     }
+    updateGeometry();
+  }
 
-    // 실루엣 밖으로 삐져나온 부분을 잘라냅니다.
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.drawImage(body.canvas, 0, 0);
-    ctx.globalCompositeOperation = 'source-over';
+  /** 파츠 쿼드를 정점 버퍼로 굽습니다. 파츠는 뭉개지지 않으므로 모양은 항상 그대로입니다. */
+  function updateGeometry() {
+    var n = instances.length;
+    if (!atlas) return;
+    if (!geom || geom.length < n * 24) geom = new Float32Array(Math.max(n, 8) * 24);
+    var k = 0;
+    for (var i = 0; i < n; i++) {
+      var p = instances[i];
+      var box = atlas.uv[p.id + '|' + p.ci];
+      if (!box) continue;
+      var c = Math.cos(p.rot) * p.r, s2 = Math.sin(p.rot) * p.r;
+      // 회전한 네 모서리 (좌상, 우상, 우하, 좌하)
+      var x0 = p.u - c + s2, y0 = p.v - s2 - c;
+      var x1 = p.u + c + s2, y1 = p.v + s2 - c;
+      var x2 = p.u + c - s2, y2 = p.v + s2 + c;
+      var x3 = p.u - c - s2, y3 = p.v - s2 + c;
+      var u0 = box[0], v0 = box[1], u1 = box[2], v1 = box[3];
+      var v = [x0, y0, u0, v0,  x1, y1, u1, v0,  x2, y2, u1, v1,
+               x0, y0, u0, v0,  x2, y2, u1, v1,  x3, y3, u0, v1];
+      for (var m = 0; m < 24; m++) geom[k++] = v[m];
+    }
+    renderer.setPartGeometry(geom, k / 24);
+  }
 
-    renderer.setMix(mixCanvas);
+  /** 변형장을 파츠 중심에 적용합니다. 밀려나되 형태는 유지됩니다. */
+  var _d = [0, 0];
+  function movePartsWith(sim) {
+    if (!instances.length) return 0;
+    var total = 0;
+    for (var i = 0; i < instances.length; i++) {
+      var p = instances[i];
+      sim.displaceAt(p.u, p.v, _d);
+      if (_d[0] === 0 && _d[1] === 0) continue;
+      p.u += _d[0]; p.v += _d[1];
+      p.rot += (_d[0] * p.spinA + _d[1] * p.spinB) * 16;
+      total += Math.abs(_d[0]) + Math.abs(_d[1]);
+    }
+    return total;
+  }
+
+  /** 파츠가 얼마나 빽빽한지 0~1 — 와그작 소리의 밀도가 됩니다. */
+  function partLoad() {
+    if (!instances.length) return 0;
+    return clamp(instances.length / 34, 0, 1) * clamp(0.55 + S.size * 0.45, 0, 1.3);
   }
 
   function applyImage(sourceCanvasOrImg) {
-    var prepared = Img.prepare(sourceCanvasOrImg, {
+    body = Img.prepare(sourceCanvasOrImg, {
       removeBg: S.removeBg, tolerance: S.tolerance, trim: S.trim
     });
-    body = prepared;
-    alphaMap = buildAlphaMap(body.canvas);
     renderer.setBody(body.canvas);
-    buildMixLayer();
+    refreshMask();
+    rebuildParts();
+    kneaded = 0;
     hasImage = true;
     $('dropzone').hidden = true;
-    $('stageHint').hidden = false;
     $('glcanvas').classList.remove('empty');
+    $('stageHint').hidden = false;
+    $('stageHint').textContent = '꾹 누르거나 문질러보세요';
     setTimeout(function () { $('stageHint').hidden = true; }, 6000);
+    updateResetState();
+  }
+
+  /** 주무른 걸 전부 되돌립니다. */
+  function resetSlime(quiet) {
+    if (!hasImage) return;
+    renderer.reset();
+    refreshMask();
+    rebuildParts();
+    sim.releaseAll();
+    pointers = {};
+    kneaded = 0;
+    updateResetState();
+    if (!quiet) toast('처음 모습으로 되돌렸어요');
+  }
+
+  function updateResetState() {
+    var btns = [$('btnReset'), $('btnReset2')];
+    for (var i = 0; i < btns.length; i++) {
+      if (btns[i]) btns[i].disabled = !hasImage || kneaded < 0.002;
+    }
   }
 
   var rawSource = null;   // 원본(설정을 바꿔도 다시 처리할 수 있게 보관)
-  function loadSource(src) {
-    rawSource = src;
-    applyImage(src);
-  }
+  function loadSource(src) { rawSource = src; applyImage(src); }
   function reprocess() { if (rawSource) applyImage(rawSource); }
 
   /* ------------------------------------------------------------------ */
@@ -2115,13 +2492,10 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   function canvasUV(ev) {
     var cv = $('glcanvas');
     var r = cv.getBoundingClientRect();
-    var nx = (ev.clientX - r.left) / r.width;
-    var ny = (ev.clientY - r.top) / r.height;
-    return renderer.screenToTex(nx, ny);
+    return renderer.screenToTex((ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height);
   }
 
-  function pressStrength() { return 0.040 + S.jelly * 0.055; }
-  function pressRadius() { return 0.13 + S.jelly * 0.07; }
+  function pressRadius() { return 0.11 + S.jelly * 0.08; }
 
   function onDown(ev) {
     if (!hasImage) return;
@@ -2129,10 +2503,10 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     var p = canvasUV(ev);
     if (alphaAt(p.u, p.v) < 24) return;      // 슬라임 바깥은 무시
     $('glcanvas').setPointerCapture(ev.pointerId);
+    var id = sim.poke(p.u, p.v, pressRadius());
+    pointers[ev.pointerId] = { pokeId: id, x: ev.clientX, y: ev.clientY };
     var force = ev.pressure && ev.pressure > 0 && ev.pointerType !== 'mouse' ? (0.5 + ev.pressure) : 1;
-    var id = sim.poke(p.u, p.v, pressStrength() * force, pressRadius());
-    pointers[ev.pointerId] = { pokeId: id, x: ev.clientX, y: ev.clientY, t: performance.now() };
-    Audio.press(clamp(0.55 + force * 0.35, 0.2, 1));
+    Audio.press(clamp(0.55 + force * 0.35, 0.2, 1), partLoad());
     $('stageHint').hidden = true;
     ev.preventDefault();
   }
@@ -2142,10 +2516,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     if (!rec) return;
     var p = canvasUV(ev);
     sim.move(rec.pokeId, p.u, p.v);
-    var dx = ev.clientX - rec.x, dy = ev.clientY - rec.y;
-    var dist = Math.sqrt(dx * dx + dy * dy);
     rec.x = ev.clientX; rec.y = ev.clientY;
-    if (dist > 2) Audio.rub(clamp(dist / 26, 0.06, 0.5));
     ev.preventDefault();
   }
 
@@ -2153,8 +2524,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     var rec = pointers[ev.pointerId];
     if (!rec) return;
     delete pointers[ev.pointerId];
-    var e = sim.release(rec.pokeId);
-    Audio.release(clamp(e * 14, 0.15, 0.8));
+    sim.release(rec.pokeId);
+    Audio.release(0.45);
+    refreshMask();                            // 뭉개진 실루엣으로 판정 기준을 갱신
     try { $('glcanvas').releasePointerCapture(ev.pointerId); } catch (err) {}
   }
 
@@ -2167,8 +2539,20 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     if (document.hidden) { lastT = t; return; }
     var dt = lastT ? (t - lastT) / 1000 : 0.016;
     lastT = t;
-    sim.jelly = S.jelly; sim.wobble = S.wobble;
+
+    sim.jelly = S.jelly;
+    sim.wobble = S.wobble;
     sim.step(dt);
+
+    if (sim.active() && sim.motion > 0.00002) {
+      renderer.knead(sim);                    // 텍스처에 변형을 영구히 새깁니다
+      if (movePartsWith(sim) > 0) updateGeometry();
+      kneaded = Math.min(1, kneaded + sim.motion * 1.6);
+      if (kneaded > 0.002) updateResetState();
+      // 실제로 뭉개지는 양에 맞춰 마찰음이 이어집니다.
+      if (sim.motion > 0.0005) Audio.rub(clamp(sim.motion * 75, 0.05, 0.6), partLoad());
+    }
+
     renderer.render(sim);
   }
 
@@ -2179,7 +2563,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     var transparent = S.bg === 'transparent';
     var rgb = transparent ? [0, 0, 0] : hex2rgb(S.bg);
     renderer.setParams({
-      gloss: S.gloss, rim: S.rim, wobble: S.wobble,
+      gloss: S.gloss, rim: S.rim,
       tint: hex2rgb(S.tint), tintAmt: S.tintAmt, depth: S.depth,
       bg: [rgb[0], rgb[1], rgb[2], transparent ? 0 : 1],
       shadow: transparent ? 0 : 0.2
@@ -2264,7 +2648,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
         var i = S.parts.indexOf(p.id);
         if (i >= 0) S.parts.splice(i, 1); else S.parts.push(p.id);
         b.setAttribute('aria-pressed', i >= 0 ? 'false' : 'true');
-        buildMixLayer(); syncAudio(); save();
+        rebuildParts(); syncAudio(); save();
       });
       grid.appendChild(b);
     });
@@ -2313,7 +2697,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
         applySkin({});
         $('colBg').value = /^#/.test(S.bg) ? S.bg : '#fdf3f7';
         bindAllValues();
-        buildPartUI(); buildMixLayer(); syncRenderer(); syncAudio(); save();
+        buildPartUI(); rebuildParts(); syncRenderer(); syncAudio(); save();
         toast('설정을 불러왔어요');
       } catch (e) { toast('설정 파일을 읽지 못했어요'); }
     };
@@ -2392,6 +2776,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       return;
     }
 
+    atlas = Parts.buildAtlas(128);
+    renderer.setPartAtlas(atlas.canvas);
+
     bindAllValues();
     buildPartUI();
     syncRenderer();
@@ -2403,7 +2790,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
 
     chipRow($('soundPresets'), Audio.PRESETS,
       function (p) { return p.id === S.sound; },
-      function (p) { S.sound = p.id; syncAudio(); save(); Audio.press(0.7); });
+      function (p) { S.sound = p.id; syncAudio(); save(); Audio.press(0.7, partLoad()); });
 
     chipRow($('bgPresets'), BGS,
       function (b) { return b.c === S.bg; },
@@ -2414,10 +2801,10 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     bindRange('rngJelly', 'jelly');
     bindRange('rngWobble', 'wobble');
     bindRange('rngTint', 'tintAmt');
-    bindRange('rngCount', 'count', asInt, buildMixLayer);
-    bindRange('rngSize', 'size', null, buildMixLayer);
+    bindRange('rngCount', 'count', asInt, rebuildParts);
+    bindRange('rngSize', 'size', null, rebuildParts);
     bindRange('rngDepth', 'depth');
-    bindRange('rngSpread', 'spread', null, buildMixLayer);
+    bindRange('rngSpread', 'spread', null, rebuildParts);
     bindRange('rngBgTol', 'tolerance', asInt, reprocess);
     bindRange('rngVol', 'volume', null, syncAudio);
     bindRange('rngVerb', 'reverb', null, syncAudio);
@@ -2434,11 +2821,14 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     $('chkTrim').addEventListener('change', function () { S.trim = this.checked; save(); reprocess(); });
     $('chkPartSound').addEventListener('change', function () { S.partSound = this.checked; syncAudio(); save(); });
 
-    function shuffle() { S.seed = (Math.random() * 1e9) | 0; buildMixLayer(); save(); toast('다시 섞었어요'); }
+    function shuffle() { S.seed = (Math.random() * 1e9) | 0; rebuildParts(); save(); toast('다시 섞었어요'); }
     $('btnShuffle').addEventListener('click', shuffle);
+    $('btnReset').addEventListener('click', function () { resetSlime(false); });
+    $('btnReset2').addEventListener('click', function () { resetSlime(false); });
+    updateResetState();
     $('btnShuffle2').addEventListener('click', shuffle);
     $('btnClearParts').addEventListener('click', function () {
-      S.parts = []; renderPartGrid(); buildMixLayer(); syncAudio(); save();
+      S.parts = []; renderPartGrid(); rebuildParts(); syncAudio(); save();
     });
 
     $('btnMute').addEventListener('click', function () {
@@ -2494,9 +2884,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       if (!hasImage || (e.key !== ' ' && e.key !== 'Enter')) return;
       e.preventDefault();
       Audio.init();
-      var id = sim.poke(0.5, 0.5, pressStrength(), pressRadius());
-      Audio.press(0.8);
-      setTimeout(function () { sim.release(id); Audio.release(0.4); }, 220);
+      var id = sim.poke(0.5, 0.5, pressRadius());
+      Audio.press(0.8, partLoad());
+      setTimeout(function () { sim.release(id); Audio.release(0.4); refreshMask(); }, 260);
     });
 
     // 패널 접기

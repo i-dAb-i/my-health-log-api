@@ -107,23 +107,16 @@
   /* 슬라임 본체                                                          */
   /* ------------------------------------------------------------------ */
   var renderer = null, sim = Physics.create();
-  var body = null;        // { canvas, mask }
-  var alphaMap = null;    // { data:Uint8Array, w, h } — 어디를 눌렀는지 판정용
-  var mixCanvas = null;
-  var pointers = {};      // pointerId → { pokeId, lastX, lastY, t }
+  var body = null;        // { canvas, mask } — 원본 기준
+  var alphaMap = null;    // 지금 뭉개진 상태의 알파(어디를 눌렀는지 판정용)
+  var atlas = null;       // 파츠 스프라이트 시트
+  var instances = [];     // 슬라임에 박힌 파츠들 — 고체라 위치·회전만 바뀝니다
+  var geom = null;        // 파츠 정점 버퍼
+  var pointers = {};      // pointerId → { pokeId, x, y }
   var hasImage = false;
+  var kneaded = 0;        // 지금까지 얼마나 주물렀는지(0~1 대략)
 
-  function buildAlphaMap(cv) {
-    var w = 128, h = 128;
-    var t = document.createElement('canvas');
-    t.width = w; t.height = h;
-    var c = t.getContext('2d', { willReadFrequently: true });
-    c.drawImage(cv, 0, 0, w, h);
-    var d = c.getImageData(0, 0, w, h).data;
-    var out = new Uint8Array(w * h);
-    for (var i = 0; i < w * h; i++) out[i] = d[i * 4 + 3];
-    return { data: out, w: w, h: h };
-  }
+  var QUAD_FILL = 0.68;   // 아틀라스 타일에서 파츠가 실제로 차지하는 비율
 
   function alphaAt(u, v) {
     if (!alphaMap || u < 0 || v < 0 || u > 1 || v > 1) return 0;
@@ -132,84 +125,148 @@
     return alphaMap.data[y * alphaMap.w + x];
   }
 
-  /** 활성 파츠를 마스크 안쪽에 흩뿌려 파츠 레이어를 만듭니다. */
-  function buildMixLayer() {
-    if (!body) return;
-    var side = body.canvas.width;
-    if (!mixCanvas) mixCanvas = document.createElement('canvas');
-    mixCanvas.width = mixCanvas.height = side;
-    var ctx = mixCanvas.getContext('2d');
-    ctx.clearRect(0, 0, side, side);
+  function refreshMask() {
+    var m = renderer.readMask();
+    if (m) alphaMap = m;
+  }
+
+  /** 활성 파츠를 실루엣 안쪽에 흩뿌립니다. 위치는 여기서 한 번만 정해집니다. */
+  function rebuildParts() {
+    instances = [];
+    if (!body) { renderer.setPartGeometry(new Float32Array(0), 0); return; }
 
     var ids = S.parts.filter(function (id) { return !!Parts.byId(id); });
-    if (!ids.length || S.count <= 0) { renderer.setMix(null); return; }
-
     var pts = body.mask.points;
-    if (!pts.length) { renderer.setMix(null); return; }
+    if (!ids.length || S.count <= 0 || !pts.length) {
+      renderer.setPartGeometry(new Float32Array(0), 0);
+      updateGeometry();
+      return;
+    }
 
     var rand = rng(S.seed);
-    var base = side * 0.042 * S.size;
+    var base = 0.042 * S.size;       // 텍스처 uv 단위 반지름
     var placed = [];
 
     for (var i = 0; i < S.count; i++) {
-      var id = ids[Math.floor(rand() * ids.length)];
-      var tries = 0, pt = null, r = base * (0.72 + rand() * 0.66);
-      // 서로 심하게 겹치지 않도록 몇 번 다시 뽑습니다.
+      var part = Parts.byId(ids[Math.floor(rand() * ids.length)]);
+      var r = base * (0.72 + rand() * 0.66) * (part.ratio || 1);
+      var spot = null, tries = 0;
       while (tries++ < 22) {
         var cand = pts[Math.floor(rand() * pts.length)];
-        // 깊은 곳일수록 큰 파츠가 들어갈 수 있습니다.
-        var room = (cand.depth / body.mask.maxDepth);
+        var room = cand.depth / body.mask.maxDepth;
         if (room < 0.12) continue;
         // 퍼짐이 낮으면 가장자리 쪽을 더 자주 고릅니다(가운데 얼굴을 덜 가리게).
         var dc = Math.sqrt(Math.pow(cand.u - 0.5, 2) + Math.pow(cand.v - 0.5, 2));
-        var accept = S.spread + (1 - S.spread) * clamp(dc / 0.40, 0, 1);
-        if (rand() > accept) continue;
-        var cx = cand.u * side, cy = cand.v * side;
+        if (rand() > S.spread + (1 - S.spread) * clamp(dc / 0.40, 0, 1)) continue;
         var ok = true;
         for (var j = 0; j < placed.length; j++) {
-          var dx = placed[j].x - cx, dy = placed[j].y - cy;
-          if (dx * dx + dy * dy < Math.pow((placed[j].r + r) * 0.82, 2)) { ok = false; break; }
+          var dx = placed[j].u - cand.u, dy = placed[j].v - cand.v;
+          if (dx * dx + dy * dy < Math.pow((placed[j].rr + r) * 0.85, 2)) { ok = false; break; }
         }
-        if (ok) { pt = { x: cx, y: cy, r: Math.min(r, base * 1.5 * (0.4 + room)) }; break; }
+        if (ok) { spot = cand; break; }
       }
-      if (!pt) continue;
-      placed.push(pt);
+      if (!spot) continue;
 
-      ctx.save();
-      ctx.translate(pt.x, pt.y);
-      ctx.globalAlpha = 0.88 + rand() * 0.12;
-      Parts.draw(ctx, id, pt.r, Math.floor(rand() * 8), (rand() - 0.5) * Math.PI * 2);
-      ctx.restore();
+      var rr = Math.min(r, base * 1.5 * (0.4 + spot.depth / body.mask.maxDepth));
+      placed.push({ u: spot.u, v: spot.v, rr: rr });
+      instances.push({
+        id: part.id,
+        ci: Math.floor(rand() * part.colors.length),
+        u: spot.u, v: spot.v,
+        r: rr / QUAD_FILL,
+        rot: (rand() - 0.5) * Math.PI * 2,
+        spinA: (rand() - 0.5) * 2,
+        spinB: (rand() - 0.5) * 2
+      });
     }
+    updateGeometry();
+  }
 
-    // 실루엣 밖으로 삐져나온 부분을 잘라냅니다.
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.drawImage(body.canvas, 0, 0);
-    ctx.globalCompositeOperation = 'source-over';
+  /** 파츠 쿼드를 정점 버퍼로 굽습니다. 파츠는 뭉개지지 않으므로 모양은 항상 그대로입니다. */
+  function updateGeometry() {
+    var n = instances.length;
+    if (!atlas) return;
+    if (!geom || geom.length < n * 24) geom = new Float32Array(Math.max(n, 8) * 24);
+    var k = 0;
+    for (var i = 0; i < n; i++) {
+      var p = instances[i];
+      var box = atlas.uv[p.id + '|' + p.ci];
+      if (!box) continue;
+      var c = Math.cos(p.rot) * p.r, s2 = Math.sin(p.rot) * p.r;
+      // 회전한 네 모서리 (좌상, 우상, 우하, 좌하)
+      var x0 = p.u - c + s2, y0 = p.v - s2 - c;
+      var x1 = p.u + c + s2, y1 = p.v + s2 - c;
+      var x2 = p.u + c - s2, y2 = p.v + s2 + c;
+      var x3 = p.u - c - s2, y3 = p.v - s2 + c;
+      var u0 = box[0], v0 = box[1], u1 = box[2], v1 = box[3];
+      var v = [x0, y0, u0, v0,  x1, y1, u1, v0,  x2, y2, u1, v1,
+               x0, y0, u0, v0,  x2, y2, u1, v1,  x3, y3, u0, v1];
+      for (var m = 0; m < 24; m++) geom[k++] = v[m];
+    }
+    renderer.setPartGeometry(geom, k / 24);
+  }
 
-    renderer.setMix(mixCanvas);
+  /** 변형장을 파츠 중심에 적용합니다. 밀려나되 형태는 유지됩니다. */
+  var _d = [0, 0];
+  function movePartsWith(sim) {
+    if (!instances.length) return 0;
+    var total = 0;
+    for (var i = 0; i < instances.length; i++) {
+      var p = instances[i];
+      sim.displaceAt(p.u, p.v, _d);
+      if (_d[0] === 0 && _d[1] === 0) continue;
+      p.u += _d[0]; p.v += _d[1];
+      p.rot += (_d[0] * p.spinA + _d[1] * p.spinB) * 16;
+      total += Math.abs(_d[0]) + Math.abs(_d[1]);
+    }
+    return total;
+  }
+
+  /** 파츠가 얼마나 빽빽한지 0~1 — 와그작 소리의 밀도가 됩니다. */
+  function partLoad() {
+    if (!instances.length) return 0;
+    return clamp(instances.length / 34, 0, 1) * clamp(0.55 + S.size * 0.45, 0, 1.3);
   }
 
   function applyImage(sourceCanvasOrImg) {
-    var prepared = Img.prepare(sourceCanvasOrImg, {
+    body = Img.prepare(sourceCanvasOrImg, {
       removeBg: S.removeBg, tolerance: S.tolerance, trim: S.trim
     });
-    body = prepared;
-    alphaMap = buildAlphaMap(body.canvas);
     renderer.setBody(body.canvas);
-    buildMixLayer();
+    refreshMask();
+    rebuildParts();
+    kneaded = 0;
     hasImage = true;
     $('dropzone').hidden = true;
-    $('stageHint').hidden = false;
     $('glcanvas').classList.remove('empty');
+    $('stageHint').hidden = false;
+    $('stageHint').textContent = '꾹 누르거나 문질러보세요';
     setTimeout(function () { $('stageHint').hidden = true; }, 6000);
+    updateResetState();
+  }
+
+  /** 주무른 걸 전부 되돌립니다. */
+  function resetSlime(quiet) {
+    if (!hasImage) return;
+    renderer.reset();
+    refreshMask();
+    rebuildParts();
+    sim.releaseAll();
+    pointers = {};
+    kneaded = 0;
+    updateResetState();
+    if (!quiet) toast('처음 모습으로 되돌렸어요');
+  }
+
+  function updateResetState() {
+    var btns = [$('btnReset'), $('btnReset2')];
+    for (var i = 0; i < btns.length; i++) {
+      if (btns[i]) btns[i].disabled = !hasImage || kneaded < 0.002;
+    }
   }
 
   var rawSource = null;   // 원본(설정을 바꿔도 다시 처리할 수 있게 보관)
-  function loadSource(src) {
-    rawSource = src;
-    applyImage(src);
-  }
+  function loadSource(src) { rawSource = src; applyImage(src); }
   function reprocess() { if (rawSource) applyImage(rawSource); }
 
   /* ------------------------------------------------------------------ */
@@ -218,13 +275,10 @@
   function canvasUV(ev) {
     var cv = $('glcanvas');
     var r = cv.getBoundingClientRect();
-    var nx = (ev.clientX - r.left) / r.width;
-    var ny = (ev.clientY - r.top) / r.height;
-    return renderer.screenToTex(nx, ny);
+    return renderer.screenToTex((ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height);
   }
 
-  function pressStrength() { return 0.040 + S.jelly * 0.055; }
-  function pressRadius() { return 0.13 + S.jelly * 0.07; }
+  function pressRadius() { return 0.11 + S.jelly * 0.08; }
 
   function onDown(ev) {
     if (!hasImage) return;
@@ -232,10 +286,10 @@
     var p = canvasUV(ev);
     if (alphaAt(p.u, p.v) < 24) return;      // 슬라임 바깥은 무시
     $('glcanvas').setPointerCapture(ev.pointerId);
+    var id = sim.poke(p.u, p.v, pressRadius());
+    pointers[ev.pointerId] = { pokeId: id, x: ev.clientX, y: ev.clientY };
     var force = ev.pressure && ev.pressure > 0 && ev.pointerType !== 'mouse' ? (0.5 + ev.pressure) : 1;
-    var id = sim.poke(p.u, p.v, pressStrength() * force, pressRadius());
-    pointers[ev.pointerId] = { pokeId: id, x: ev.clientX, y: ev.clientY, t: performance.now() };
-    Audio.press(clamp(0.55 + force * 0.35, 0.2, 1));
+    Audio.press(clamp(0.55 + force * 0.35, 0.2, 1), partLoad());
     $('stageHint').hidden = true;
     ev.preventDefault();
   }
@@ -245,10 +299,7 @@
     if (!rec) return;
     var p = canvasUV(ev);
     sim.move(rec.pokeId, p.u, p.v);
-    var dx = ev.clientX - rec.x, dy = ev.clientY - rec.y;
-    var dist = Math.sqrt(dx * dx + dy * dy);
     rec.x = ev.clientX; rec.y = ev.clientY;
-    if (dist > 2) Audio.rub(clamp(dist / 26, 0.06, 0.5));
     ev.preventDefault();
   }
 
@@ -256,8 +307,9 @@
     var rec = pointers[ev.pointerId];
     if (!rec) return;
     delete pointers[ev.pointerId];
-    var e = sim.release(rec.pokeId);
-    Audio.release(clamp(e * 14, 0.15, 0.8));
+    sim.release(rec.pokeId);
+    Audio.release(0.45);
+    refreshMask();                            // 뭉개진 실루엣으로 판정 기준을 갱신
     try { $('glcanvas').releasePointerCapture(ev.pointerId); } catch (err) {}
   }
 
@@ -270,8 +322,20 @@
     if (document.hidden) { lastT = t; return; }
     var dt = lastT ? (t - lastT) / 1000 : 0.016;
     lastT = t;
-    sim.jelly = S.jelly; sim.wobble = S.wobble;
+
+    sim.jelly = S.jelly;
+    sim.wobble = S.wobble;
     sim.step(dt);
+
+    if (sim.active() && sim.motion > 0.00002) {
+      renderer.knead(sim);                    // 텍스처에 변형을 영구히 새깁니다
+      if (movePartsWith(sim) > 0) updateGeometry();
+      kneaded = Math.min(1, kneaded + sim.motion * 1.6);
+      if (kneaded > 0.002) updateResetState();
+      // 실제로 뭉개지는 양에 맞춰 마찰음이 이어집니다.
+      if (sim.motion > 0.0005) Audio.rub(clamp(sim.motion * 75, 0.05, 0.6), partLoad());
+    }
+
     renderer.render(sim);
   }
 
@@ -282,7 +346,7 @@
     var transparent = S.bg === 'transparent';
     var rgb = transparent ? [0, 0, 0] : hex2rgb(S.bg);
     renderer.setParams({
-      gloss: S.gloss, rim: S.rim, wobble: S.wobble,
+      gloss: S.gloss, rim: S.rim,
       tint: hex2rgb(S.tint), tintAmt: S.tintAmt, depth: S.depth,
       bg: [rgb[0], rgb[1], rgb[2], transparent ? 0 : 1],
       shadow: transparent ? 0 : 0.2
@@ -367,7 +431,7 @@
         var i = S.parts.indexOf(p.id);
         if (i >= 0) S.parts.splice(i, 1); else S.parts.push(p.id);
         b.setAttribute('aria-pressed', i >= 0 ? 'false' : 'true');
-        buildMixLayer(); syncAudio(); save();
+        rebuildParts(); syncAudio(); save();
       });
       grid.appendChild(b);
     });
@@ -416,7 +480,7 @@
         applySkin({});
         $('colBg').value = /^#/.test(S.bg) ? S.bg : '#fdf3f7';
         bindAllValues();
-        buildPartUI(); buildMixLayer(); syncRenderer(); syncAudio(); save();
+        buildPartUI(); rebuildParts(); syncRenderer(); syncAudio(); save();
         toast('설정을 불러왔어요');
       } catch (e) { toast('설정 파일을 읽지 못했어요'); }
     };
@@ -495,6 +559,9 @@
       return;
     }
 
+    atlas = Parts.buildAtlas(128);
+    renderer.setPartAtlas(atlas.canvas);
+
     bindAllValues();
     buildPartUI();
     syncRenderer();
@@ -506,7 +573,7 @@
 
     chipRow($('soundPresets'), Audio.PRESETS,
       function (p) { return p.id === S.sound; },
-      function (p) { S.sound = p.id; syncAudio(); save(); Audio.press(0.7); });
+      function (p) { S.sound = p.id; syncAudio(); save(); Audio.press(0.7, partLoad()); });
 
     chipRow($('bgPresets'), BGS,
       function (b) { return b.c === S.bg; },
@@ -517,10 +584,10 @@
     bindRange('rngJelly', 'jelly');
     bindRange('rngWobble', 'wobble');
     bindRange('rngTint', 'tintAmt');
-    bindRange('rngCount', 'count', asInt, buildMixLayer);
-    bindRange('rngSize', 'size', null, buildMixLayer);
+    bindRange('rngCount', 'count', asInt, rebuildParts);
+    bindRange('rngSize', 'size', null, rebuildParts);
     bindRange('rngDepth', 'depth');
-    bindRange('rngSpread', 'spread', null, buildMixLayer);
+    bindRange('rngSpread', 'spread', null, rebuildParts);
     bindRange('rngBgTol', 'tolerance', asInt, reprocess);
     bindRange('rngVol', 'volume', null, syncAudio);
     bindRange('rngVerb', 'reverb', null, syncAudio);
@@ -537,11 +604,14 @@
     $('chkTrim').addEventListener('change', function () { S.trim = this.checked; save(); reprocess(); });
     $('chkPartSound').addEventListener('change', function () { S.partSound = this.checked; syncAudio(); save(); });
 
-    function shuffle() { S.seed = (Math.random() * 1e9) | 0; buildMixLayer(); save(); toast('다시 섞었어요'); }
+    function shuffle() { S.seed = (Math.random() * 1e9) | 0; rebuildParts(); save(); toast('다시 섞었어요'); }
     $('btnShuffle').addEventListener('click', shuffle);
+    $('btnReset').addEventListener('click', function () { resetSlime(false); });
+    $('btnReset2').addEventListener('click', function () { resetSlime(false); });
+    updateResetState();
     $('btnShuffle2').addEventListener('click', shuffle);
     $('btnClearParts').addEventListener('click', function () {
-      S.parts = []; renderPartGrid(); buildMixLayer(); syncAudio(); save();
+      S.parts = []; renderPartGrid(); rebuildParts(); syncAudio(); save();
     });
 
     $('btnMute').addEventListener('click', function () {
@@ -597,9 +667,9 @@
       if (!hasImage || (e.key !== ' ' && e.key !== 'Enter')) return;
       e.preventDefault();
       Audio.init();
-      var id = sim.poke(0.5, 0.5, pressStrength(), pressRadius());
-      Audio.press(0.8);
-      setTimeout(function () { sim.release(id); Audio.release(0.4); }, 220);
+      var id = sim.poke(0.5, 0.5, pressRadius());
+      Audio.press(0.8, partLoad());
+      setTimeout(function () { sim.release(id); Audio.release(0.4); refreshMask(); }, 260);
     });
 
     // 패널 접기

@@ -46,6 +46,10 @@
         <div class="stage-hint" id="stageHint" hidden>꾹 눌러보세요</div>
 
         <div class="stage-tools">
+          <button class="tool" id="btnReset" type="button" title="처음 모습으로 되돌리기" disabled>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            <span>되돌리기</span>
+          </button>
           <button class="tool" id="btnShuffle" type="button" title="파츠 다시 섞기">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>
             <span>섞기</span>
@@ -102,7 +106,7 @@
               <input type="range" id="rngJelly" min="0" max="1" step="0.01" value="0.6">
             </div>
             <div class="field">
-              <label for="rngWobble">흔들림 <output id="outWobble">0.45</output></label>
+              <label for="rngWobble">숨쉬기 <output id="outWobble">0.45</output></label>
               <input type="range" id="rngWobble" min="0" max="1" step="0.01" value="0.45">
             </div>
             <div class="field">
@@ -117,6 +121,8 @@
               <label for="colTint">색</label>
               <input type="color" id="colTint" value="#8be9ff">
             </div>
+            <button class="btn full" id="btnReset2" type="button" disabled>처음 모습으로 되돌리기</button>
+            <p class="note">누르고 문지른 자국은 지워지지 않고 계속 쌓입니다. 다 뭉갰으면 여기서 되돌리세요.</p>
           </div>
         </details>
 
@@ -202,7 +208,9 @@
       <ol>
         <li><b>이미지</b> — 배경이 투명한 PNG를 올려주세요. 배경이 흰색이면 <b>흰 배경 자동 제거</b>를 켜면 됩니다.</li>
         <li><b>파츠</b> — 과일·동물·하트·크런치 중에서 골라 담으면 슬라임 안쪽에 박힙니다.</li>
-        <li><b>누르기</b> — 슬라임을 꾹 누르면 눌린 자국이 생기고 소리가 납니다. 끌면 문지르는 소리가 나요.</li>
+        <li><b>주무르기</b> — 꾹 누르거나 문지르면 진짜 점토처럼 <b>색이 섞이면서 형태가 무너집니다.</b>
+          손을 떼도 돌아오지 않고 계속 쌓여요. 파츠는 고체라 모양은 그대로인 채 밀려납니다.</li>
+        <li><b>되돌리기</b> — 충분히 망가뜨렸으면 <b>되돌리기</b>로 처음 모습으로 돌아갑니다.</li>
         <li><b>저장</b> — PNG 한 장 또는 영상(webm)으로 저장해서 그대로 올릴 수 있어요.</li>
       </ol>
       <p class="note">모든 처리는 이 브라우저 안에서만 일어납니다. 올린 이미지는 어디로도 전송되지 않아요.</p>
