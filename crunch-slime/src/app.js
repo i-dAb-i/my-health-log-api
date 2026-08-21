@@ -66,15 +66,41 @@
     toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2200);
   }
 
-  function download(blob, name) {
+  function anchorSave(blob, name) {
     try {
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url; a.download = name;
       document.body.appendChild(a); a.click();
       setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1500);
-      return true;
-    } catch (e) { return false; }
+      return 'saved';
+    } catch (e) { return 'blocked'; }
+  }
+
+  /**
+   * 파일 저장. 보통은 링크로 내려받고, 다운로드가 막힌 미리보기 화면
+   * (claude.ai Artifact 등)에서는 호스트의 저장 기능을 씁니다.
+   * → 'saved' | 'declined' | 'blocked'
+   */
+  function saveFile(blob, name) {
+    var C = global.claude;
+    if (C && typeof C.use === 'function') {
+      return C.use('downloads').then(function (dl) {
+        if (!dl) return anchorSave(blob, name);
+        return dl.save({ filename: name, data: blob })
+          .then(function () { return 'saved'; })
+          .catch(function (err) { return (err && err.code === 'declined') ? 'declined' : 'blocked'; });
+      }).catch(function () { return anchorSave(blob, name); });
+    }
+    return Promise.resolve(anchorSave(blob, name));
+  }
+
+  function toastSave(what) {
+    return function (status) {
+      if (status === 'saved') toast(what + '을(를) 저장했어요');
+      else if (status === 'declined') toast('저장을 취소했어요');
+      else toast('이 화면에서는 다운로드가 막혀 있어요');
+    };
   }
 
   /* ------------------------------------------------------------------ */
@@ -378,8 +404,7 @@
 
   function exportPreset() {
     var blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
-    if (download(blob, 'crunch-slime-preset.json')) toast('설정을 내보냈어요');
-    else toast('이 화면에서는 다운로드가 막혀 있어요');
+    saveFile(blob, 'crunch-slime-preset.json').then(toastSave('설정'));
   }
 
   function importPreset(file) {
@@ -424,8 +449,8 @@
     if (!hasImage) { toast('먼저 이미지를 올려주세요'); return; }
     renderer.render(sim);
     $('glcanvas').toBlob(function (blob) {
-      if (blob && download(blob, 'crunch-slime.png')) toast('PNG로 저장했어요');
-      else toast('이 화면에서는 다운로드가 막혀 있어요');
+      if (!blob) { toast('이미지를 만들지 못했어요'); return; }
+      saveFile(blob, 'crunch-slime.png').then(toastSave('PNG'));
     }, 'image/png');
   }
 
@@ -449,8 +474,7 @@
       var blob = new Blob(chunks, { type: 'video/webm' });
       recorder = null;
       btn.textContent = '영상 녹화';
-      if (download(blob, 'crunch-slime.webm')) toast('영상을 저장했어요');
-      else toast('이 화면에서는 다운로드가 막혀 있어요');
+      saveFile(blob, 'crunch-slime.webm').then(toastSave('영상'));
     };
     recorder.start();
     btn.textContent = '■ 녹화 중지';
@@ -593,7 +617,7 @@
     global.addEventListener('resize', function () { renderer.resize(); });
     global.addEventListener('blur', function () { sim.releaseAll(); pointers = {}; });
 
-    $('exportNote').textContent = 'PNG·영상·설정 파일은 이 브라우저에서 바로 내려받습니다. 미리보기 화면에서는 다운로드가 막힐 수 있어요.';
+    $('exportNote').textContent = 'PNG·영상·설정 파일은 이 기기로 바로 저장됩니다. 미리보기 화면에서는 저장 확인창이 한 번 더 뜰 수 있어요.';
 
     requestAnimationFrame(frame);
   }

@@ -44,3 +44,16 @@ writeFileSync(out, html, 'utf8');
 
 const kb = (Buffer.byteLength(html) / 1024).toFixed(1);
 console.log(`완성: dist/crunch-slime.html (${kb} KB)`);
+
+/* 본문만 받는 호스트(claude.ai Artifact 등)용 — 래퍼 태그를 벗긴 판본.
+ * 그런 호스트는 파일을 <!doctype><head></head><body> 안에 감싸서 띄우므로
+ * 문서 태그가 중복되면 안 됩니다. 일반 배포에는 위의 crunch-slime.html 을 쓰세요. */
+const bodyOnly = html
+  .replace(/<!doctype html>\s*/i, '')
+  .replace(/<html lang="ko">\s*/i, '')
+  .replace(/<\/?head>\s*/gi, '')
+  .replace(/<\/?body>\s*/gi, '')
+  .replace(/<\/html>\s*/i, '')
+  .trim() + '\n';
+writeFileSync(resolve(root, 'dist/artifact.html'), bodyOnly, 'utf8');
+console.log('완성: dist/artifact.html (본문 전용)');
