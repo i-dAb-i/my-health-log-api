@@ -7,13 +7,13 @@
       Img = global.CS.ImageUtil, Physics = global.CS.Physics, GL = global.CS.Renderer;
 
   var $ = function (id) { return document.getElementById(id); };
-  var STORE_KEY = 'crunch-slime.v1';
+  var STORE_KEY = 'crunch-slime.v2';
 
   /* ------------------------------------------------------------------ */
   /* 상태                                                                */
   /* ------------------------------------------------------------------ */
   var S = {
-    gloss: 0.55, rim: 0.40, jelly: 0.60, wobble: 0.45,
+    gloss: 0.55, rim: 0.40, jelly: 0.60, wobble: 0.45, crust: 0.72,
     tintAmt: 0.18, tint: '#8be9ff',
     parts: ['strawberry', 'heart', 'bead', 'star'],
     tab: 'fruit',
@@ -24,7 +24,7 @@
   };
 
   var SKINS = [
-    { id: 'jelly',  name: '젤리',   v: { gloss: 0.55, rim: 0.40, jelly: 0.60, wobble: 0.45, tintAmt: 0.18, tint: '#8be9ff' } },
+    { id: 'jelly',  name: '젤리',   v: { gloss: 0.55, rim: 0.40, jelly: 0.60, wobble: 0.45, crust: 0.72, tintAmt: 0.18, tint: '#8be9ff' } },
     { id: 'clear',  name: '클리어', v: { gloss: 0.88, rim: 0.62, jelly: 0.50, wobble: 0.55, tintAmt: 0.10, tint: '#bfefff' } },
     { id: 'butter', name: '버터',   v: { gloss: 0.28, rim: 0.20, jelly: 0.82, wobble: 0.24, tintAmt: 0.30, tint: '#ffe6a8' } },
     { id: 'crunch', name: '크런치', v: { gloss: 0.66, rim: 0.34, jelly: 0.34, wobble: 0.30, tintAmt: 0.12, tint: '#ffd9ec' } },
@@ -206,6 +206,15 @@
     renderer.setPartGeometry(geom, k / 24);
   }
 
+  /** 껍질 저항 — 셰이더의 coreAt() 과 같은 취지를 CPU 에서 근사합니다. */
+  function crustFactor(u, v) {
+    var e = 0.055;
+    var a = (alphaAt(u, v) + alphaAt(u - e, v) + alphaAt(u + e, v) +
+             alphaAt(u, v - e) + alphaAt(u, v + e)) / 5 / 255;
+    var core = clamp((a - 0.22) / 0.72, 0, 1);
+    return 1 - S.crust * 0.90 * (1 - core);
+  }
+
   /** 변형장을 파츠 중심에 적용합니다. 밀려나되 형태는 유지됩니다. */
   var _d = [0, 0];
   function movePartsWith(sim) {
@@ -215,6 +224,8 @@
       var p = instances[i];
       sim.displaceAt(p.u, p.v, _d);
       if (_d[0] === 0 && _d[1] === 0) continue;
+      var sk = crustFactor(p.u, p.v);
+      _d[0] *= sk; _d[1] *= sk;
       p.u += _d[0]; p.v += _d[1];
       p.rot += (_d[0] * p.spinA + _d[1] * p.spinB) * 16;
       total += Math.abs(_d[0]) + Math.abs(_d[1]);
@@ -346,7 +357,7 @@
     var transparent = S.bg === 'transparent';
     var rgb = transparent ? [0, 0, 0] : hex2rgb(S.bg);
     renderer.setParams({
-      gloss: S.gloss, rim: S.rim,
+      gloss: S.gloss, rim: S.rim, crust: S.crust,
       tint: hex2rgb(S.tint), tintAmt: S.tintAmt, depth: S.depth,
       bg: [rgb[0], rgb[1], rgb[2], transparent ? 0 : 1],
       shadow: transparent ? 0 : 0.2
@@ -439,9 +450,9 @@
 
   function applySkin(v) {
     for (var k in v) S[k] = v[k];
-    ['rngGloss', 'rngRim', 'rngJelly', 'rngWobble', 'rngTint'].forEach(function (id) {
+    ['rngGloss', 'rngRim', 'rngJelly', 'rngWobble', 'rngTint', 'rngCrust'].forEach(function (id) {
       var key = id.replace('rng', '').toLowerCase();
-      var map = { gloss: 'gloss', rim: 'rim', jelly: 'jelly', wobble: 'wobble', tint: 'tintAmt' };
+      var map = { gloss: 'gloss', rim: 'rim', jelly: 'jelly', wobble: 'wobble', tint: 'tintAmt', crust: 'crust' };
       var el = $(id), out = $(id.replace('rng', 'out'));
       el.value = S[map[key]];
       if (out) out.textContent = (+S[map[key]]).toFixed(2);
@@ -489,7 +500,7 @@
 
   function bindAllValues() {
     [['rngGloss', 'gloss'], ['rngRim', 'rim'], ['rngJelly', 'jelly'], ['rngWobble', 'wobble'],
-     ['rngTint', 'tintAmt'], ['rngCount', 'count'], ['rngSize', 'size'], ['rngDepth', 'depth'],
+     ['rngTint', 'tintAmt'], ['rngCrust', 'crust'], ['rngCount', 'count'], ['rngSize', 'size'], ['rngDepth', 'depth'],
      ['rngSpread', 'spread'],
      ['rngVol', 'volume'], ['rngVerb', 'reverb'], ['rngBgTol', 'tolerance']].forEach(function (pair) {
       var el = $(pair[0]); if (!el) return;
@@ -581,6 +592,7 @@
 
     bindRange('rngGloss', 'gloss');
     bindRange('rngRim', 'rim');
+    bindRange('rngCrust', 'crust');
     bindRange('rngJelly', 'jelly');
     bindRange('rngWobble', 'wobble');
     bindRange('rngTint', 'tintAmt');

@@ -14,6 +14,7 @@
   ];
 
   var ctx = null, master = null, dry = null, wet = null, verb = null, comp = null;
+  var tone = null, shelf = null;
   var noiseBuf = null;
   var state = { volume: 0.75, reverb: 0.22, muted: false, preset: 'crunch', partTags: [], usePartTags: true };
   var voices = 0, lastRub = 0;
@@ -54,14 +55,22 @@
     master = ctx.createGain();
     master.gain.value = state.muted ? 0 : state.volume;
 
+    // 맑고 높은 성분은 여기서 한 번 더 눌러 둡니다. 개별 음색이 어떻게 바뀌든
+    // 이 지점을 통과하므로 쨍한 소리가 새어 나오지 않습니다.
+    tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass'; tone.frequency.value = 3800; tone.Q.value = 0.6;
+    shelf = ctx.createBiquadFilter();
+    shelf.type = 'highshelf'; shelf.frequency.value = 1800; shelf.gain.value = -9;
+
     verb = ctx.createConvolver();
     verb.buffer = makeImpulse(1.7, 2.6);
 
     dry = ctx.createGain(); dry.gain.value = 1 - state.reverb * 0.5;
     wet = ctx.createGain(); wet.gain.value = state.reverb;
 
-    master.connect(dry); dry.connect(comp);
-    master.connect(wet); wet.connect(verb); verb.connect(comp);
+    master.connect(tone); tone.connect(shelf);
+    shelf.connect(dry); dry.connect(comp);
+    shelf.connect(wet); wet.connect(verb); verb.connect(comp);
     comp.connect(ctx.destination);
 
     noiseBuf = makeNoise(2);
@@ -141,25 +150,21 @@
     osc.start(t0); track(osc, t0 + o.dur + 0.02);
   }
 
-  /** FM 핑 — 구슬·유리 */
-  function ping(t0, o) {
+  /** 딱딱한 것들이 부딪히는 소리. 음정이 생기지 않도록 노이즈로만 만듭니다. */
+  function clack(t0, o) {
     if (voices > MAX_VOICES) return;
-    var car = ctx.createOscillator(); car.type = 'sine';
-    car.frequency.value = o.freq;
-    var mod = ctx.createOscillator(); mod.type = 'sine';
-    mod.frequency.value = o.freq * (o.ratio || 2.7);
-    var mg = ctx.createGain(); mg.gain.value = o.freq * (o.index || 1.6);
-    mg.gain.setValueAtTime(o.freq * (o.index || 1.6), t0);
-    mg.gain.exponentialRampToValueAtTime(1, t0 + o.dur * 0.5);
-    mod.connect(mg); mg.connect(car.frequency);
+    var src = noiseSource(rnd(0.7, 1.3));
+    var bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(o.f * rnd(0.9, 1.15), t0);
+    bp.frequency.exponentialRampToValueAtTime(o.f * rnd(0.55, 0.8), t0 + o.dur);
+    bp.Q.value = o.q || rnd(4, 9);
     var g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(o.gain, t0 + 0.004);
+    g.gain.exponentialRampToValueAtTime(o.gain, t0 + 0.0025);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
-    car.connect(g); g.connect(master);
-    car.start(t0); mod.start(t0);
-    track(car, t0 + o.dur + 0.02);
-    try { mod.stop(t0 + o.dur + 0.02); } catch (e) {}
+    src.connect(bp); bp.connect(g); g.connect(master);
+    src.start(t0); track(src, t0 + o.dur + 0.02);
   }
 
   /** 낮은 "툭" — 사인파 대신 저역 노이즈라 훨씬 덜 인공적입니다. */
@@ -183,11 +188,11 @@
   /* 슬라임 자체의 소리 — 끈적한 마찰. 음정이 있는 성분은 넣지 않습니다.   */
   /* ------------------------------------------------------------------ */
   var SLIME = {
-    crunch: { f0: 620, f1: 2600, f2: 480, q: 6.5, dur: 0.25, wet: 0.85, pops: 0.40 },
-    squish: { f0: 380, f1: 1500, f2: 260, q: 4.5, dur: 0.34, wet: 1.00, pops: 0.70 },
-    clay:   { f0: 900, f1: 3000, f2: 700, q: 12.0, dur: 0.19, wet: 0.60, pops: 0.20 },
-    bubble: { f0: 420, f1: 1300, f2: 300, q: 5.0, dur: 0.28, wet: 1.00, pops: 1.00 },
-    glass:  { f0: 800, f1: 3800, f2: 600, q: 8.0, dur: 0.22, wet: 0.70, pops: 0.30 }
+    crunch: { f0: 480, f1: 1500, f2: 380, q: 5.5, dur: 0.25, wet: 0.90, pops: 0.40 },
+    squish: { f0: 320, f1: 1000, f2: 230, q: 4.0, dur: 0.34, wet: 1.00, pops: 0.70 },
+    clay:   { f0: 620, f1: 1700, f2: 520, q: 9.0, dur: 0.19, wet: 0.70, pops: 0.20 },
+    bubble: { f0: 340, f1: 900,  f2: 260, q: 4.5, dur: 0.28, wet: 1.00, pops: 1.00 },
+    glass:  { f0: 560, f1: 2000, f2: 440, q: 7.0, dur: 0.22, wet: 0.80, pops: 0.30 }
   };
 
   function slimePress(t, v) {
@@ -200,12 +205,12 @@
     });
     sweep(t + 0.012, {
       type: 'lowpass', q: 2.6,
-      f0: 900 * j, f1: 340 * j, f2: 170 * j,
+      f0: 700 * j, f1: 300 * j, f2: 160 * j,
       dur: m.dur * 0.8, gain: 0.17 * v * m.wet
     });
     thud(t, v * 0.85);
     if (Math.random() < m.pops * 0.75) {
-      pop(t + rnd(0.03, 0.11), { f0: rnd(420, 950), f1: rnd(90, 170), dur: rnd(0.05, 0.095), gain: 0.10 * v });
+      pop(t + rnd(0.03, 0.11), { f0: rnd(260, 560), f1: rnd(70, 120), dur: rnd(0.05, 0.095), gain: 0.10 * v });
     }
   }
 
@@ -214,25 +219,25 @@
   /* ------------------------------------------------------------------ */
   var TAGS = {
     crunch: function (t, v) {
-      grains(t, { count: Math.round(6 + v * 14), spread: 0.09, fmin: 1400, fmax: 7200, gain: 0.28 * v, dmin: 0.005, dmax: 0.026 });
+      grains(t, { count: Math.round(6 + v * 14), spread: 0.09, fmin: 700, fmax: 3200, gain: 0.28 * v, dmin: 0.005, dmax: 0.026 });
     },
     squish: function (t, v) {
       sweep(t, { f0: 420, f1: 1500, f2: 260, q: 8, dur: 0.20, gain: 0.20 * v });
     },
     clay: function (t, v) {
-      sweep(t, { f0: 1700, f1: 2900, f2: 1200, q: 17, dur: 0.15, gain: 0.18 * v, type: 'bandpass' });
+      sweep(t, { f0: 1100, f1: 1800, f2: 820, q: 12, dur: 0.15, gain: 0.18 * v, type: 'bandpass' });
     },
     bubble: function (t, v) {
       var n = Math.round(2 + v * 3);
-      for (var i = 0; i < n; i++) pop(t + i * rnd(0.02, 0.06), { f0: rnd(600, 1400), f1: rnd(90, 200), dur: rnd(0.05, 0.11), gain: 0.22 * v });
+      for (var i = 0; i < n; i++) pop(t + i * rnd(0.02, 0.06), { f0: rnd(320, 700), f1: rnd(70, 130), dur: rnd(0.05, 0.11), gain: 0.22 * v });
     },
     bead: function (t, v) {
       var n = Math.round(2 + v * 4);
-      for (var i = 0; i < n; i++) ping(t + i * rnd(0.012, 0.05), { freq: rnd(1100, 2600), ratio: rnd(2.1, 3.4), index: rnd(1, 2.4), dur: rnd(0.05, 0.12), gain: 0.14 * v });
+      for (var i = 0; i < n; i++) clack(t + i * rnd(0.012, 0.05), { f: rnd(700, 1500), q: rnd(4, 8), dur: rnd(0.035, 0.075), gain: 0.16 * v });
     },
     glass: function (t, v) {
       var n = Math.round(3 + v * 5);
-      for (var i = 0; i < n; i++) ping(t + i * rnd(0.01, 0.045), { freq: rnd(2600, 6200), ratio: rnd(3.1, 5.2), index: rnd(1.4, 3), dur: rnd(0.05, 0.11), gain: 0.10 * v });
+      for (var i = 0; i < n; i++) clack(t + i * rnd(0.01, 0.045), { f: rnd(1200, 2600), q: rnd(6, 12), dur: rnd(0.03, 0.06), gain: 0.12 * v });
     },
     pop: function (t, v) { TAGS.bubble(t, v); }
   };
@@ -247,12 +252,12 @@
     grains(t + rnd(0, 0.012), {
       count: Math.round((3 + load * 20) * v),
       spread: 0.05 + load * 0.10,
-      fmin: 1300, fmax: 7000, gain: 0.30 * amt, dmin: 0.005, dmax: 0.030
+      fmin: 650, fmax: 3000, gain: 0.30 * amt, dmin: 0.005, dmax: 0.030
     });
     grains(t + rnd(0.015, 0.045), {
       count: Math.round((2 + load * 8) * v),
       spread: 0.09 + load * 0.09,
-      fmin: 380, fmax: 1700, q: 2.4, gain: 0.19 * amt, dmin: 0.012, dmax: 0.055
+      fmin: 260, fmax: 1200, q: 2.4, gain: 0.19 * amt, dmin: 0.012, dmax: 0.055
     });
     // 넣은 파츠 종류의 색을 얹습니다(유리는 쨍하게, 구슬은 또르륵).
     var tags = state.partTags;
@@ -296,7 +301,7 @@
       if (load > 0.001 && state.usePartTags) {
         grains(now + 0.001, {
           count: Math.round((1 + load * 9) * v * 2),
-          spread: 0.055, fmin: 1800, fmax: 7600,
+          spread: 0.055, fmin: 750, fmax: 3100,
           gain: 0.22 * v * (0.4 + load * 0.6), dmin: 0.004, dmax: 0.020
         });
       }
@@ -308,7 +313,7 @@
       var t = ctx.currentTime + 0.001;
       var v = Math.max(0.08, Math.min(0.7, intensity));
       sweep(t, { type: 'bandpass', q: 7, f0: 300, f1: 1100, f2: 240, dur: 0.16, gain: 0.15 * v });
-      if (Math.random() < 0.6) pop(t + 0.02, { f0: rnd(300, 560), f1: rnd(80, 140), dur: 0.08, gain: 0.09 * v });
+      if (Math.random() < 0.6) pop(t + 0.02, { f0: rnd(220, 420), f1: rnd(65, 110), dur: 0.08, gain: 0.09 * v });
     },
 
     setVolume: function (v) {

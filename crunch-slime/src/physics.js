@@ -100,9 +100,10 @@
       p.pressAmt = rate * dt * p.energy;
 
       // 끌기 성분 — 한 프레임에 너무 많이 밀리지 않게 잘라냅니다.
-      var cap = 0.055;
+      // 문지를 때 한 프레임에 끌려가는 양. 크면 획 하나에 형태가 통째로 뭉개집니다.
+      var cap = 0.030;
       var s = Math.min(speed, cap);
-      var k = speed > 1e-6 ? (s / speed) * 0.92 : 0;
+      var k = speed > 1e-6 ? (s / speed) * 0.55 : 0;
       p.dragX = mx * k; p.dragY = my * k;
 
       this.motion += p.pressAmt + s * 1.9;

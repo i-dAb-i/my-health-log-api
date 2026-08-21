@@ -377,6 +377,11 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
               <input type="range" id="rngRim" min="0" max="1" step="0.01" value="0.4">
             </div>
             <div class="field">
+              <label for="rngCrust">껍질 단단함 <output id="outCrust">0.72</output></label>
+              <input type="range" id="rngCrust" min="0" max="1" step="0.01" value="0.72">
+              <p class="note">그림 테두리가 안쪽으로 무너지는 걸 버팁니다. 낮추면 실루엣까지 흐물흐물해져요.</p>
+            </div>
+            <div class="field">
               <label for="rngTint">슬라임 색 섞기 <output id="outTint">0.18</output></label>
               <input type="range" id="rngTint" min="0" max="0.85" step="0.01" value="0.18">
             </div>
@@ -953,6 +958,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   ];
 
   var ctx = null, master = null, dry = null, wet = null, verb = null, comp = null;
+  var tone = null, shelf = null;
   var noiseBuf = null;
   var state = { volume: 0.75, reverb: 0.22, muted: false, preset: 'crunch', partTags: [], usePartTags: true };
   var voices = 0, lastRub = 0;
@@ -993,14 +999,22 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     master = ctx.createGain();
     master.gain.value = state.muted ? 0 : state.volume;
 
+    // 맑고 높은 성분은 여기서 한 번 더 눌러 둡니다. 개별 음색이 어떻게 바뀌든
+    // 이 지점을 통과하므로 쨍한 소리가 새어 나오지 않습니다.
+    tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass'; tone.frequency.value = 3800; tone.Q.value = 0.6;
+    shelf = ctx.createBiquadFilter();
+    shelf.type = 'highshelf'; shelf.frequency.value = 1800; shelf.gain.value = -9;
+
     verb = ctx.createConvolver();
     verb.buffer = makeImpulse(1.7, 2.6);
 
     dry = ctx.createGain(); dry.gain.value = 1 - state.reverb * 0.5;
     wet = ctx.createGain(); wet.gain.value = state.reverb;
 
-    master.connect(dry); dry.connect(comp);
-    master.connect(wet); wet.connect(verb); verb.connect(comp);
+    master.connect(tone); tone.connect(shelf);
+    shelf.connect(dry); dry.connect(comp);
+    shelf.connect(wet); wet.connect(verb); verb.connect(comp);
     comp.connect(ctx.destination);
 
     noiseBuf = makeNoise(2);
@@ -1080,25 +1094,21 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     osc.start(t0); track(osc, t0 + o.dur + 0.02);
   }
 
-  /** FM 핑 — 구슬·유리 */
-  function ping(t0, o) {
+  /** 딱딱한 것들이 부딪히는 소리. 음정이 생기지 않도록 노이즈로만 만듭니다. */
+  function clack(t0, o) {
     if (voices > MAX_VOICES) return;
-    var car = ctx.createOscillator(); car.type = 'sine';
-    car.frequency.value = o.freq;
-    var mod = ctx.createOscillator(); mod.type = 'sine';
-    mod.frequency.value = o.freq * (o.ratio || 2.7);
-    var mg = ctx.createGain(); mg.gain.value = o.freq * (o.index || 1.6);
-    mg.gain.setValueAtTime(o.freq * (o.index || 1.6), t0);
-    mg.gain.exponentialRampToValueAtTime(1, t0 + o.dur * 0.5);
-    mod.connect(mg); mg.connect(car.frequency);
+    var src = noiseSource(rnd(0.7, 1.3));
+    var bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(o.f * rnd(0.9, 1.15), t0);
+    bp.frequency.exponentialRampToValueAtTime(o.f * rnd(0.55, 0.8), t0 + o.dur);
+    bp.Q.value = o.q || rnd(4, 9);
     var g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(o.gain, t0 + 0.004);
+    g.gain.exponentialRampToValueAtTime(o.gain, t0 + 0.0025);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
-    car.connect(g); g.connect(master);
-    car.start(t0); mod.start(t0);
-    track(car, t0 + o.dur + 0.02);
-    try { mod.stop(t0 + o.dur + 0.02); } catch (e) {}
+    src.connect(bp); bp.connect(g); g.connect(master);
+    src.start(t0); track(src, t0 + o.dur + 0.02);
   }
 
   /** 낮은 "툭" — 사인파 대신 저역 노이즈라 훨씬 덜 인공적입니다. */
@@ -1122,11 +1132,11 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   /* 슬라임 자체의 소리 — 끈적한 마찰. 음정이 있는 성분은 넣지 않습니다.   */
   /* ------------------------------------------------------------------ */
   var SLIME = {
-    crunch: { f0: 620, f1: 2600, f2: 480, q: 6.5, dur: 0.25, wet: 0.85, pops: 0.40 },
-    squish: { f0: 380, f1: 1500, f2: 260, q: 4.5, dur: 0.34, wet: 1.00, pops: 0.70 },
-    clay:   { f0: 900, f1: 3000, f2: 700, q: 12.0, dur: 0.19, wet: 0.60, pops: 0.20 },
-    bubble: { f0: 420, f1: 1300, f2: 300, q: 5.0, dur: 0.28, wet: 1.00, pops: 1.00 },
-    glass:  { f0: 800, f1: 3800, f2: 600, q: 8.0, dur: 0.22, wet: 0.70, pops: 0.30 }
+    crunch: { f0: 480, f1: 1500, f2: 380, q: 5.5, dur: 0.25, wet: 0.90, pops: 0.40 },
+    squish: { f0: 320, f1: 1000, f2: 230, q: 4.0, dur: 0.34, wet: 1.00, pops: 0.70 },
+    clay:   { f0: 620, f1: 1700, f2: 520, q: 9.0, dur: 0.19, wet: 0.70, pops: 0.20 },
+    bubble: { f0: 340, f1: 900,  f2: 260, q: 4.5, dur: 0.28, wet: 1.00, pops: 1.00 },
+    glass:  { f0: 560, f1: 2000, f2: 440, q: 7.0, dur: 0.22, wet: 0.80, pops: 0.30 }
   };
 
   function slimePress(t, v) {
@@ -1139,12 +1149,12 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     });
     sweep(t + 0.012, {
       type: 'lowpass', q: 2.6,
-      f0: 900 * j, f1: 340 * j, f2: 170 * j,
+      f0: 700 * j, f1: 300 * j, f2: 160 * j,
       dur: m.dur * 0.8, gain: 0.17 * v * m.wet
     });
     thud(t, v * 0.85);
     if (Math.random() < m.pops * 0.75) {
-      pop(t + rnd(0.03, 0.11), { f0: rnd(420, 950), f1: rnd(90, 170), dur: rnd(0.05, 0.095), gain: 0.10 * v });
+      pop(t + rnd(0.03, 0.11), { f0: rnd(260, 560), f1: rnd(70, 120), dur: rnd(0.05, 0.095), gain: 0.10 * v });
     }
   }
 
@@ -1153,25 +1163,25 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   /* ------------------------------------------------------------------ */
   var TAGS = {
     crunch: function (t, v) {
-      grains(t, { count: Math.round(6 + v * 14), spread: 0.09, fmin: 1400, fmax: 7200, gain: 0.28 * v, dmin: 0.005, dmax: 0.026 });
+      grains(t, { count: Math.round(6 + v * 14), spread: 0.09, fmin: 700, fmax: 3200, gain: 0.28 * v, dmin: 0.005, dmax: 0.026 });
     },
     squish: function (t, v) {
       sweep(t, { f0: 420, f1: 1500, f2: 260, q: 8, dur: 0.20, gain: 0.20 * v });
     },
     clay: function (t, v) {
-      sweep(t, { f0: 1700, f1: 2900, f2: 1200, q: 17, dur: 0.15, gain: 0.18 * v, type: 'bandpass' });
+      sweep(t, { f0: 1100, f1: 1800, f2: 820, q: 12, dur: 0.15, gain: 0.18 * v, type: 'bandpass' });
     },
     bubble: function (t, v) {
       var n = Math.round(2 + v * 3);
-      for (var i = 0; i < n; i++) pop(t + i * rnd(0.02, 0.06), { f0: rnd(600, 1400), f1: rnd(90, 200), dur: rnd(0.05, 0.11), gain: 0.22 * v });
+      for (var i = 0; i < n; i++) pop(t + i * rnd(0.02, 0.06), { f0: rnd(320, 700), f1: rnd(70, 130), dur: rnd(0.05, 0.11), gain: 0.22 * v });
     },
     bead: function (t, v) {
       var n = Math.round(2 + v * 4);
-      for (var i = 0; i < n; i++) ping(t + i * rnd(0.012, 0.05), { freq: rnd(1100, 2600), ratio: rnd(2.1, 3.4), index: rnd(1, 2.4), dur: rnd(0.05, 0.12), gain: 0.14 * v });
+      for (var i = 0; i < n; i++) clack(t + i * rnd(0.012, 0.05), { f: rnd(700, 1500), q: rnd(4, 8), dur: rnd(0.035, 0.075), gain: 0.16 * v });
     },
     glass: function (t, v) {
       var n = Math.round(3 + v * 5);
-      for (var i = 0; i < n; i++) ping(t + i * rnd(0.01, 0.045), { freq: rnd(2600, 6200), ratio: rnd(3.1, 5.2), index: rnd(1.4, 3), dur: rnd(0.05, 0.11), gain: 0.10 * v });
+      for (var i = 0; i < n; i++) clack(t + i * rnd(0.01, 0.045), { f: rnd(1200, 2600), q: rnd(6, 12), dur: rnd(0.03, 0.06), gain: 0.12 * v });
     },
     pop: function (t, v) { TAGS.bubble(t, v); }
   };
@@ -1186,12 +1196,12 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     grains(t + rnd(0, 0.012), {
       count: Math.round((3 + load * 20) * v),
       spread: 0.05 + load * 0.10,
-      fmin: 1300, fmax: 7000, gain: 0.30 * amt, dmin: 0.005, dmax: 0.030
+      fmin: 650, fmax: 3000, gain: 0.30 * amt, dmin: 0.005, dmax: 0.030
     });
     grains(t + rnd(0.015, 0.045), {
       count: Math.round((2 + load * 8) * v),
       spread: 0.09 + load * 0.09,
-      fmin: 380, fmax: 1700, q: 2.4, gain: 0.19 * amt, dmin: 0.012, dmax: 0.055
+      fmin: 260, fmax: 1200, q: 2.4, gain: 0.19 * amt, dmin: 0.012, dmax: 0.055
     });
     // 넣은 파츠 종류의 색을 얹습니다(유리는 쨍하게, 구슬은 또르륵).
     var tags = state.partTags;
@@ -1235,7 +1245,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       if (load > 0.001 && state.usePartTags) {
         grains(now + 0.001, {
           count: Math.round((1 + load * 9) * v * 2),
-          spread: 0.055, fmin: 1800, fmax: 7600,
+          spread: 0.055, fmin: 750, fmax: 3100,
           gain: 0.22 * v * (0.4 + load * 0.6), dmin: 0.004, dmax: 0.020
         });
       }
@@ -1247,7 +1257,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       var t = ctx.currentTime + 0.001;
       var v = Math.max(0.08, Math.min(0.7, intensity));
       sweep(t, { type: 'bandpass', q: 7, f0: 300, f1: 1100, f2: 240, dur: 0.16, gain: 0.15 * v });
-      if (Math.random() < 0.6) pop(t + 0.02, { f0: rnd(300, 560), f1: rnd(80, 140), dur: 0.08, gain: 0.09 * v });
+      if (Math.random() < 0.6) pop(t + 0.02, { f0: rnd(220, 420), f1: rnd(65, 110), dur: 0.08, gain: 0.09 * v });
     },
 
     setVolume: function (v) {
@@ -1646,9 +1656,10 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       p.pressAmt = rate * dt * p.energy;
 
       // 끌기 성분 — 한 프레임에 너무 많이 밀리지 않게 잘라냅니다.
-      var cap = 0.055;
+      // 문지를 때 한 프레임에 끌려가는 양. 크면 획 하나에 형태가 통째로 뭉개집니다.
+      var cap = 0.030;
       var s = Math.min(speed, cap);
-      var k = speed > 1e-6 ? (s / speed) * 0.92 : 0;
+      var k = speed > 1e-6 ? (s / speed) * 0.55 : 0;
       p.dragX = mx * k; p.dragY = my * k;
 
       this.motion += p.pressAmt + s * 1.9;
@@ -1747,6 +1758,18 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     'uniform vec4 uA[6];',   // u, v, 반지름, 누름량
     'uniform vec4 uB[6];',   // 끌기x, 끌기y, 소용돌이, 위상
     'uniform float uFirm;',  // 실루엣을 다시 세우는 정도
+    'uniform float uSkin;',  // 테두리(껍질)가 버티는 정도
+    'uniform float uTexel;',
+    '',
+    // 이 지점이 덩어리 안쪽 얼마나 깊은지 — 껍질 판정에 씁니다.
+    'float coreAt(vec2 p, float r){',
+    '  float s = 0.0;',
+    '  for(int i = 0; i < 8; i++){',
+    '    float a = float(i) * 0.78539816;',
+    '    s += texture2D(uSrc, clamp(p + vec2(cos(a), sin(a)) * r, 0.0, 1.0)).a;',
+    '  }',
+    '  return s * 0.125;',
+    '}',
     '',
     'vec2 disp(vec2 uv){',
     '  vec2 d = vec2(0.0);',
@@ -1769,7 +1792,11 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     '}',
     '',
     'void main(){',
-    '  vec4 c = texture2D(uSrc, clamp(vUv + disp(vUv), 0.0, 1.0));',
+    // 그림 테두리는 슬라임의 껍질입니다. 가장자리에 가까운 픽셀일수록 붙들려서
+    // 잘 밀리지 않으므로, 안쪽만 뭉개지고 실루엣은 오래 버팁니다.
+    '  float core = smoothstep(0.22, 0.94, coreAt(vUv, uTexel * 17.0));',
+    '  vec2 d = disp(vUv) * mix(1.0 - uSkin * 0.90, 1.0, core);',
+    '  vec4 c = texture2D(uSrc, clamp(vUv + d, 0.0, 1.0));',
     // 알파까지 계속 번지면 실루엣이 안개처럼 사라지므로 아주 약하게 다시 세웁니다.
     '  float a = clamp((c.a - 0.5) * uFirm + 0.5, 0.0, 1.0);',
     '  vec3 rgb = c.a > 0.002 ? c.rgb * (a / c.a) : vec3(0.0);',
@@ -1970,7 +1997,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
 
     this.params = {
       gloss: 0.55, rim: 0.4, tint: [0.55, 0.91, 1.0], tintAmt: 0.18,
-      depth: 0.55, zoom: 0.88, shadow: 0.2, firm: 1.028,
+      depth: 0.55, zoom: 0.88, shadow: 0.2, firm: 1.032, crust: 0.72,
       bg: [0.99, 0.95, 0.97, 1]
     };
     this.resize();
@@ -2073,6 +2100,10 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     gl.uniform4fv(this.pKnead.u.uA, u.A);
     gl.uniform4fv(this.pKnead.u.uB, u.B);
     gl.uniform1f(this.pKnead.u.uFirm, this.params.firm);
+    // 값 하나라도 NaN 이면 텍스처 전체가 날아가므로 여기서 막습니다.
+    var crust = +this.params.crust;
+    gl.uniform1f(this.pKnead.u.uSkin, isFinite(crust) ? crust : 0.7);
+    gl.uniform1f(this.pKnead.u.uTexel, 1 / this.simSize);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex[this.cur]);
     this._fullscreen(this.pKnead);
@@ -2229,13 +2260,13 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       Img = global.CS.ImageUtil, Physics = global.CS.Physics, GL = global.CS.Renderer;
 
   var $ = function (id) { return document.getElementById(id); };
-  var STORE_KEY = 'crunch-slime.v1';
+  var STORE_KEY = 'crunch-slime.v2';
 
   /* ------------------------------------------------------------------ */
   /* 상태                                                                */
   /* ------------------------------------------------------------------ */
   var S = {
-    gloss: 0.55, rim: 0.40, jelly: 0.60, wobble: 0.45,
+    gloss: 0.55, rim: 0.40, jelly: 0.60, wobble: 0.45, crust: 0.72,
     tintAmt: 0.18, tint: '#8be9ff',
     parts: ['strawberry', 'heart', 'bead', 'star'],
     tab: 'fruit',
@@ -2246,7 +2277,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   };
 
   var SKINS = [
-    { id: 'jelly',  name: '젤리',   v: { gloss: 0.55, rim: 0.40, jelly: 0.60, wobble: 0.45, tintAmt: 0.18, tint: '#8be9ff' } },
+    { id: 'jelly',  name: '젤리',   v: { gloss: 0.55, rim: 0.40, jelly: 0.60, wobble: 0.45, crust: 0.72, tintAmt: 0.18, tint: '#8be9ff' } },
     { id: 'clear',  name: '클리어', v: { gloss: 0.88, rim: 0.62, jelly: 0.50, wobble: 0.55, tintAmt: 0.10, tint: '#bfefff' } },
     { id: 'butter', name: '버터',   v: { gloss: 0.28, rim: 0.20, jelly: 0.82, wobble: 0.24, tintAmt: 0.30, tint: '#ffe6a8' } },
     { id: 'crunch', name: '크런치', v: { gloss: 0.66, rim: 0.34, jelly: 0.34, wobble: 0.30, tintAmt: 0.12, tint: '#ffd9ec' } },
@@ -2428,6 +2459,15 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     renderer.setPartGeometry(geom, k / 24);
   }
 
+  /** 껍질 저항 — 셰이더의 coreAt() 과 같은 취지를 CPU 에서 근사합니다. */
+  function crustFactor(u, v) {
+    var e = 0.055;
+    var a = (alphaAt(u, v) + alphaAt(u - e, v) + alphaAt(u + e, v) +
+             alphaAt(u, v - e) + alphaAt(u, v + e)) / 5 / 255;
+    var core = clamp((a - 0.22) / 0.72, 0, 1);
+    return 1 - S.crust * 0.90 * (1 - core);
+  }
+
   /** 변형장을 파츠 중심에 적용합니다. 밀려나되 형태는 유지됩니다. */
   var _d = [0, 0];
   function movePartsWith(sim) {
@@ -2437,6 +2477,8 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       var p = instances[i];
       sim.displaceAt(p.u, p.v, _d);
       if (_d[0] === 0 && _d[1] === 0) continue;
+      var sk = crustFactor(p.u, p.v);
+      _d[0] *= sk; _d[1] *= sk;
       p.u += _d[0]; p.v += _d[1];
       p.rot += (_d[0] * p.spinA + _d[1] * p.spinB) * 16;
       total += Math.abs(_d[0]) + Math.abs(_d[1]);
@@ -2568,7 +2610,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     var transparent = S.bg === 'transparent';
     var rgb = transparent ? [0, 0, 0] : hex2rgb(S.bg);
     renderer.setParams({
-      gloss: S.gloss, rim: S.rim,
+      gloss: S.gloss, rim: S.rim, crust: S.crust,
       tint: hex2rgb(S.tint), tintAmt: S.tintAmt, depth: S.depth,
       bg: [rgb[0], rgb[1], rgb[2], transparent ? 0 : 1],
       shadow: transparent ? 0 : 0.2
@@ -2661,9 +2703,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
 
   function applySkin(v) {
     for (var k in v) S[k] = v[k];
-    ['rngGloss', 'rngRim', 'rngJelly', 'rngWobble', 'rngTint'].forEach(function (id) {
+    ['rngGloss', 'rngRim', 'rngJelly', 'rngWobble', 'rngTint', 'rngCrust'].forEach(function (id) {
       var key = id.replace('rng', '').toLowerCase();
-      var map = { gloss: 'gloss', rim: 'rim', jelly: 'jelly', wobble: 'wobble', tint: 'tintAmt' };
+      var map = { gloss: 'gloss', rim: 'rim', jelly: 'jelly', wobble: 'wobble', tint: 'tintAmt', crust: 'crust' };
       var el = $(id), out = $(id.replace('rng', 'out'));
       el.value = S[map[key]];
       if (out) out.textContent = (+S[map[key]]).toFixed(2);
@@ -2711,7 +2753,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
 
   function bindAllValues() {
     [['rngGloss', 'gloss'], ['rngRim', 'rim'], ['rngJelly', 'jelly'], ['rngWobble', 'wobble'],
-     ['rngTint', 'tintAmt'], ['rngCount', 'count'], ['rngSize', 'size'], ['rngDepth', 'depth'],
+     ['rngTint', 'tintAmt'], ['rngCrust', 'crust'], ['rngCount', 'count'], ['rngSize', 'size'], ['rngDepth', 'depth'],
      ['rngSpread', 'spread'],
      ['rngVol', 'volume'], ['rngVerb', 'reverb'], ['rngBgTol', 'tolerance']].forEach(function (pair) {
       var el = $(pair[0]); if (!el) return;
@@ -2803,6 +2845,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
 
     bindRange('rngGloss', 'gloss');
     bindRange('rngRim', 'rim');
+    bindRange('rngCrust', 'crust');
     bindRange('rngJelly', 'jelly');
     bindRange('rngWobble', 'wobble');
     bindRange('rngTint', 'tintAmt');

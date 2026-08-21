@@ -39,6 +39,18 @@
     'uniform vec4 uA[6];',   // u, v, 반지름, 누름량
     'uniform vec4 uB[6];',   // 끌기x, 끌기y, 소용돌이, 위상
     'uniform float uFirm;',  // 실루엣을 다시 세우는 정도
+    'uniform float uSkin;',  // 테두리(껍질)가 버티는 정도
+    'uniform float uTexel;',
+    '',
+    // 이 지점이 덩어리 안쪽 얼마나 깊은지 — 껍질 판정에 씁니다.
+    'float coreAt(vec2 p, float r){',
+    '  float s = 0.0;',
+    '  for(int i = 0; i < 8; i++){',
+    '    float a = float(i) * 0.78539816;',
+    '    s += texture2D(uSrc, clamp(p + vec2(cos(a), sin(a)) * r, 0.0, 1.0)).a;',
+    '  }',
+    '  return s * 0.125;',
+    '}',
     '',
     'vec2 disp(vec2 uv){',
     '  vec2 d = vec2(0.0);',
@@ -61,7 +73,11 @@
     '}',
     '',
     'void main(){',
-    '  vec4 c = texture2D(uSrc, clamp(vUv + disp(vUv), 0.0, 1.0));',
+    // 그림 테두리는 슬라임의 껍질입니다. 가장자리에 가까운 픽셀일수록 붙들려서
+    // 잘 밀리지 않으므로, 안쪽만 뭉개지고 실루엣은 오래 버팁니다.
+    '  float core = smoothstep(0.22, 0.94, coreAt(vUv, uTexel * 17.0));',
+    '  vec2 d = disp(vUv) * mix(1.0 - uSkin * 0.90, 1.0, core);',
+    '  vec4 c = texture2D(uSrc, clamp(vUv + d, 0.0, 1.0));',
     // 알파까지 계속 번지면 실루엣이 안개처럼 사라지므로 아주 약하게 다시 세웁니다.
     '  float a = clamp((c.a - 0.5) * uFirm + 0.5, 0.0, 1.0);',
     '  vec3 rgb = c.a > 0.002 ? c.rgb * (a / c.a) : vec3(0.0);',
@@ -262,7 +278,7 @@
 
     this.params = {
       gloss: 0.55, rim: 0.4, tint: [0.55, 0.91, 1.0], tintAmt: 0.18,
-      depth: 0.55, zoom: 0.88, shadow: 0.2, firm: 1.028,
+      depth: 0.55, zoom: 0.88, shadow: 0.2, firm: 1.032, crust: 0.72,
       bg: [0.99, 0.95, 0.97, 1]
     };
     this.resize();
@@ -365,6 +381,10 @@
     gl.uniform4fv(this.pKnead.u.uA, u.A);
     gl.uniform4fv(this.pKnead.u.uB, u.B);
     gl.uniform1f(this.pKnead.u.uFirm, this.params.firm);
+    // 값 하나라도 NaN 이면 텍스처 전체가 날아가므로 여기서 막습니다.
+    var crust = +this.params.crust;
+    gl.uniform1f(this.pKnead.u.uSkin, isFinite(crust) ? crust : 0.7);
+    gl.uniform1f(this.pKnead.u.uTexel, 1 / this.simSize);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex[this.cur]);
     this._fullscreen(this.pKnead);
