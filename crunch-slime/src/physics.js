@@ -14,7 +14,7 @@
   var MAX_POKES = 6;
   var HOLD_TAU = 0.55;   // 가만히 누르고만 있으면 이만큼의 시간 상수로 힘이 빠집니다
   var HOLD_FLOOR = 0.22; // 다만 완전히 멈추지는 않습니다
-  var MAX_STEP = 0.05;
+  var MAX_STEP = 0.08;
 
   function Sim() {
     this.pokes = [];
@@ -25,26 +25,30 @@
     this.motion = 0;     // 이번 프레임에 실제로 일어난 변형량(소리·파츠용)
     this.drag = 0;       // 그중 문지르기 성분
     this._A = new Float32Array(MAX_POKES * 4); // u, v, 반지름, 누름량
-    this._B = new Float32Array(MAX_POKES * 4); // 끌기x, 끌기y, 소용돌이, 위상
+    this._B = new Float32Array(MAX_POKES * 4); // 끌기x, 끌기y, 파인 자국, 위상
   }
 
-  Sim.prototype.pressRate = function () { return 0.30 + this.jelly * 0.50; };
+  Sim.prototype.pressRate = function () { return 0.13 + this.jelly * 0.20; };
 
-  /* 방사 성분은 아주 약하게만 씁니다.
-   * 순수 방사 변형은 발산이 0이 아니라서, 같은 자리를 계속 누르면 그 지점의 색이
-   * 원판처럼 부풀어 화면을 덮어버립니다. 실제 반죽에서 색이 섞이는 건 소용돌이와
-   * 밀어내기(전단) 때문이므로 그쪽을 주력으로 씁니다. */
-  var RADIAL = 0.16;
+  /* 파인 자국(음영)은 기하 변형과 따로 쌓입니다.
+   * 형태가 뭉개지는 건 계속 억제하면서도, 꾹 누르고 있으면 자국은 점점 깊어져야
+   * "안으로 들어간다"로 읽힙니다. */
+  Sim.prototype.dentRate = function () { return 0.34 + this.jelly * 0.22; };
+
+  /* 잡은 자리가 손가락을 따라가는 정도. 손가락이 멀어질수록 더 끌려오되,
+   * 한 프레임에 움직일 수 있는 거리에는 상한을 둡니다. */
+  var PULL_K = 0.16;
+  var PULL_CAP = 0.0050;
 
   Sim.prototype.poke = function (u, v, radius) {
     if (this.pokes.length >= MAX_POKES) this.pokes.shift();
     var p = {
       id: this.nextId++,
-      u: u, v: v, tu: u, tv: v,
+      u: u, v: v,           // 지금 붙잡고 있는 반죽의 위치 — 처음 누른 자리에서 출발합니다
+      tu: u, tv: v,         // 손가락 위치
       radius: radius,
       energy: 1,
-      pressAmt: 0, dragX: 0, dragY: 0,
-      swirl: (Math.random() < 0.5 ? -1 : 1) * (0.72 + Math.random() * 0.5),
+      pressAmt: 0, dentAmt: 0, dragX: 0, dragY: 0,
       phase: Math.random() * 6.28318,
       held: true
     };
@@ -57,7 +61,7 @@
     return null;
   };
 
-  /** 손가락의 새 목표 위치. 실제 이동은 step 에서 프레임 단위로 처리합니다. */
+  /** 손가락의 새 위치. 잡은 반죽이 여기로 끌려옵니다. */
   Sim.prototype.move = function (id, u, v) {
     var p = this.find(id);
     if (p) { p.tu = u; p.tv = v; }
@@ -80,34 +84,36 @@
     this.drag = 0;
 
     var rate = this.pressRate();
+    var drate = this.dentRate();
+    var scale = Math.min(1, dt * 60);
 
     for (var i = 0; i < this.pokes.length; i++) {
       var p = this.pokes[i];
 
-      // 손가락 이동 — 조금 끌리게 따라갑니다.
-      var mx = (p.tu - p.u) * 0.55;
-      var my = (p.tv - p.v) * 0.55;
-      p.u += mx; p.v += my;
+      // 손가락과 잡은 자리의 간격만큼 반죽을 끌고 옵니다.
+      // 손가락 이동 속도가 아니라 "얼마나 멀어졌는지"가 기준이라, 잡고 당기면
+      // 손을 멈춰도 반죽이 끝까지 따라옵니다.
+      var offX = p.tu - p.u, offY = p.tv - p.v;
+      var off = Math.sqrt(offX * offX + offY * offY);
+      var pull = Math.min(off * PULL_K, PULL_CAP) * scale;
+      if (off > 1e-6) {
+        p.dragX = offX / off * pull;
+        p.dragY = offY / off * pull;
+        p.u += p.dragX; p.v += p.dragY;
+      } else {
+        p.dragX = p.dragY = 0;
+      }
 
-      var speed = Math.sqrt(mx * mx + my * my);
-
-      // 움직이면 힘이 되살아나고, 가만히 있으면 서서히 빠집니다.
-      // 가만히 누르고만 있어도 아주 느리게는 계속 뭉개집니다.
-      // 문지르면 힘이 되살아나므로, 주무를수록 훨씬 빨리 무너집니다.
+      // 가만히 눌러도 아주 느리게는 계속 눌립니다. 당기면 힘이 되살아납니다.
       p.energy = Math.max(HOLD_FLOOR, p.energy * Math.exp(-dt / HOLD_TAU));
-      p.energy = Math.min(1, p.energy + Math.min(speed * 22, 1) * 0.85);
+      p.energy = Math.min(1, p.energy + Math.min(off * 14, 1) * 0.8);
 
       p.pressAmt = rate * dt * p.energy;
+      // 음영은 힘이 빠져도 절반 이상 유지되어 계속 깊어집니다.
+      p.dentAmt = drate * dt * (0.55 + 0.45 * p.energy);
 
-      // 끌기 성분 — 한 프레임에 너무 많이 밀리지 않게 잘라냅니다.
-      // 문지를 때 한 프레임에 끌려가는 양. 크면 획 하나에 형태가 통째로 뭉개집니다.
-      var cap = 0.030;
-      var s = Math.min(speed, cap);
-      var k = speed > 1e-6 ? (s / speed) * 0.55 : 0;
-      p.dragX = mx * k; p.dragY = my * k;
-
-      this.motion += p.pressAmt + s * 1.9;
-      this.drag += s;
+      this.motion += p.pressAmt + pull * 1.6;
+      this.drag += pull;
     }
     return this.motion;
   };
@@ -119,7 +125,7 @@
       var p = this.pokes[i], o = i * 4;
       if (p) {
         A[o] = p.u; A[o + 1] = p.v; A[o + 2] = Math.max(p.radius, 0.001); A[o + 3] = p.pressAmt;
-        B[o] = p.dragX; B[o + 1] = p.dragY; B[o + 2] = p.swirl; B[o + 3] = p.phase;
+        B[o] = p.dragX; B[o + 1] = p.dragY; B[o + 2] = p.dentAmt; B[o + 3] = p.phase;
       } else {
         A[o] = A[o + 1] = 0; A[o + 2] = 0.001; A[o + 3] = 0;
         B[o] = B[o + 1] = B[o + 2] = B[o + 3] = 0;
@@ -140,12 +146,10 @@
       var x2 = (rx * rx + ry * ry) / (R * R);
       if (x2 > 6.25) continue;
       var ang = Math.atan2(ry, rx);
-      var w = Math.exp(-x2 * 1.5) * (0.78 + 0.22 * Math.sin(ang * 3 + p.phase));
-      // 소용돌이(발산 0) — 부풀리지 않고 섞기만 합니다. 셰이더 disp() 와 부호가 같아야 합니다.
-      dx += -ry / R * p.pressAmt * w * p.swirl;
-      dy += rx / R * p.pressAmt * w * p.swirl;
-      dx += rx / R * p.pressAmt * w * RADIAL + p.dragX * w;
-      dy += ry / R * p.pressAmt * w * RADIAL + p.dragY * w;
+      var w = Math.exp(-x2 * 1.5) * (0.86 + 0.14 * Math.sin(ang * 3 + p.phase));
+      // 누른 자리로 딸려 들어옵니다(수축). 셰이더 disp() 와 부호가 같아야 합니다.
+      dx += -rx / R * p.pressAmt * w + p.dragX * w * w;
+      dy += -ry / R * p.pressAmt * w + p.dragY * w * w;
     }
     out[0] = dx; out[1] = dy;
     return out;

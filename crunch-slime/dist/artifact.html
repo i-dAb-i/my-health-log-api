@@ -957,7 +957,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   var noiseBuf = null;
   var state = { volume: 0.75, reverb: 0.22, muted: false, preset: 'crunch', partTags: [], usePartTags: true };
   var voices = 0, lastRub = 0;
-  var MAX_VOICES = 48;
+  var MAX_VOICES = 96;
 
   function rnd(a, b) { return a + Math.random() * (b - a); }
 
@@ -997,9 +997,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     // 맑고 높은 성분은 여기서 한 번 더 눌러 둡니다. 개별 음색이 어떻게 바뀌든
     // 이 지점을 통과하므로 쨍한 소리가 새어 나오지 않습니다.
     tone = ctx.createBiquadFilter();
-    tone.type = 'lowpass'; tone.frequency.value = 3800; tone.Q.value = 0.6;
+    tone.type = 'lowpass'; tone.frequency.value = 6500; tone.Q.value = 0.55;
     shelf = ctx.createBiquadFilter();
-    shelf.type = 'highshelf'; shelf.frequency.value = 1800; shelf.gain.value = -9;
+    shelf.type = 'highshelf'; shelf.frequency.value = 3000; shelf.gain.value = -4;
 
     verb = ctx.createConvolver();
     verb.buffer = makeImpulse(1.7, 2.6);
@@ -1033,28 +1033,6 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   /* ------------------------------------------------------------------ */
   /* 기본 음색 빌딩 블록                                                  */
   /* ------------------------------------------------------------------ */
-
-  /** 알갱이 노이즈 폭발 — 바삭바삭한 크런치 */
-  function grains(t0, o) {
-    var n = o.count | 0;
-    for (var i = 0; i < n; i++) {
-      if (voices > MAX_VOICES) return;
-      var t = t0 + Math.pow(Math.random(), 1.5) * o.spread;
-      var src = noiseSource(rnd(0.8, 1.6));
-      var bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = rnd(o.fmin, o.fmax);
-      bp.Q.value = o.q || rnd(3, 11);
-      var g = ctx.createGain();
-      var dur = rnd(o.dmin || 0.008, o.dmax || 0.03);
-      var peak = o.gain * rnd(0.45, 1);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(peak, t + 0.0016);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      src.connect(bp); bp.connect(g); g.connect(master);
-      src.start(t); track(src, t + dur + 0.02);
-    }
-  }
 
   /** 필터 스윕 노이즈 — 축축한 스퀴시 */
   function sweep(t0, o) {
@@ -1106,6 +1084,48 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     src.start(t0); track(src, t0 + o.dur + 0.02);
   }
 
+  /**
+   * 하나의 파열(조각 하나가 부서지는 순간).
+   * 어택이 순간적이어야 "딱" 하고 갈라지는 소리가 됩니다. 서서히 올리면
+   * 알갱이가 뭉개져서 "쉬익" 하는 바람 소리로 들립니다.
+   */
+  function crackEvent(t, amp, big) {
+    if (voices > MAX_VOICES) return;
+    var src = noiseSource(rnd(0.75, 1.6));
+    var bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    // 큰 조각일수록 낮고 길게, 잔 조각일수록 높고 짧게 부서집니다.
+    var f = big ? rnd(420, 1400) : rnd(1500, 5200);
+    bp.frequency.setValueAtTime(f, t);
+    bp.frequency.exponentialRampToValueAtTime(f * rnd(0.42, 0.72), t + (big ? 0.055 : 0.016));
+    bp.Q.value = big ? rnd(4, 9) : rnd(8, 18);
+    var g = ctx.createGain();
+    var dur = big ? rnd(0.040, 0.090) : rnd(0.004, 0.016);
+    g.gain.setValueAtTime(Math.max(0.0003, amp), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp); bp.connect(g); g.connect(master);
+    src.start(t); track(src, t + dur + 0.02);
+  }
+
+  /**
+   * 와그작 — 여러 조각이 잇달아 부서지는 소리.
+   * 진폭을 넓게 흩뿌리는 게 핵심입니다. 크기가 고르면 백색소음처럼 들리고,
+   * 큰 놈 몇 개 + 잔 놈 여럿이어야 "우두둑 자그작"으로 들립니다.
+   */
+  function crackle(t0, v, load) {
+    var span = 0.09 + load * 0.15;
+    var big = Math.round(1 + load * 3);
+    var small = Math.round(6 + load * 26);
+    var i;
+    for (i = 0; i < big; i++) {
+      crackEvent(t0 + Math.pow(Math.random(), 1.5) * span, v * rnd(0.20, 0.38), true);
+    }
+    for (i = 0; i < small; i++) {
+      var a = Math.pow(Math.random(), 2.2);   // 대부분 작고 가끔 크게
+      crackEvent(t0 + Math.pow(Math.random(), 1.15) * span, v * (0.035 + a * 0.30), false);
+    }
+  }
+
   /** 낮은 "툭" — 사인파 대신 저역 노이즈라 훨씬 덜 인공적입니다. */
   function thud(t0, v) {
     if (voices > MAX_VOICES) return;
@@ -1134,13 +1154,13 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     glass:  { f0: 560, f1: 2000, f2: 440, q: 7.0, dur: 0.22, wet: 0.80, pops: 0.30 }
   };
 
-  function slimePress(t, v) {
+  function slimePress(t, v, load) {
     var m = SLIME[state.preset] || SLIME.squish;
     var j = rnd(0.9, 1.14);   // 누를 때마다 조금씩 달라지게
     sweep(t, {
       type: 'bandpass', q: m.q * rnd(0.85, 1.2),
       f0: m.f0 * j, f1: m.f1 * j, f2: m.f2 * j,
-      dur: m.dur * rnd(0.85, 1.2), gain: 0.30 * v
+      dur: m.dur * rnd(0.85, 1.2), gain: 0.30 * v * (1 - 0.28 * (load || 0))
     });
     sweep(t + 0.012, {
       type: 'lowpass', q: 2.6,
@@ -1157,9 +1177,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   /* 파츠끼리 부딪히는 와그작 — 파츠가 들어 있을 때만 납니다.              */
   /* ------------------------------------------------------------------ */
   var TAGS = {
-    crunch: function (t, v) {
-      grains(t, { count: Math.round(6 + v * 14), spread: 0.09, fmin: 700, fmax: 3200, gain: 0.28 * v, dmin: 0.005, dmax: 0.026 });
-    },
+    crunch: function (t, v) { crackle(t, v, 0.5); },
     squish: function (t, v) {
       sweep(t, { f0: 420, f1: 1500, f2: 260, q: 8, dur: 0.20, gain: 0.20 * v });
     },
@@ -1187,22 +1205,14 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
    */
   function partCrunch(t, v, load) {
     if (load <= 0.001 || !state.usePartTags) return;
-    var amt = v * (0.35 + load * 0.65);
-    grains(t + rnd(0, 0.012), {
-      count: Math.round((3 + load * 20) * v),
-      spread: 0.05 + load * 0.10,
-      fmin: 650, fmax: 3000, gain: 0.30 * amt, dmin: 0.005, dmax: 0.030
-    });
-    grains(t + rnd(0.015, 0.045), {
-      count: Math.round((2 + load * 8) * v),
-      spread: 0.09 + load * 0.09,
-      fmin: 260, fmax: 1200, q: 2.4, gain: 0.19 * amt, dmin: 0.012, dmax: 0.055
-    });
-    // 넣은 파츠 종류의 색을 얹습니다(유리는 쨍하게, 구슬은 또르륵).
+    crackle(t, v * (0.55 + load * 0.45), load);
+    // 넣은 파츠 종류의 색을 살짝 얹습니다.
     var tags = state.partTags;
     for (var i = 0; i < tags.length; i++) {
       var fn = TAGS[tags[i]];
-      if (fn && Math.random() < 0.55 + load * 0.4) fn(t + rnd(0, 0.04), amt * (0.5 / Math.sqrt(tags.length)));
+      if (fn && Math.random() < 0.45 + load * 0.35) {
+        fn(t + rnd(0, 0.04), v * load * (0.42 / Math.sqrt(tags.length)));
+      }
     }
   }
 
@@ -1220,8 +1230,8 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       if (state.muted || !init()) return;
       var t = ctx.currentTime + 0.001;
       var v = Math.max(0.15, Math.min(1, intensity == null ? 0.8 : intensity));
-      slimePress(t, v);
-      partCrunch(t + 0.008, v, load || 0);
+      slimePress(t, v, load || 0);
+      partCrunch(t + 0.006, v, load || 0);
     },
 
     /** 문지르기 — 너무 자주 울리지 않도록 간격을 둡니다. */
@@ -1238,11 +1248,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
         dur: 0.14, gain: 0.19 * v
       });
       if (load > 0.001 && state.usePartTags) {
-        grains(now + 0.001, {
-          count: Math.round((1 + load * 9) * v * 2),
-          spread: 0.055, fmin: 750, fmax: 3100,
-          gain: 0.22 * v * (0.4 + load * 0.6), dmin: 0.004, dmax: 0.020
-        });
+        crackle(now + 0.001, v * 1.15, load * 0.55);
       }
     },
 
@@ -1565,7 +1571,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
   var MAX_POKES = 6;
   var HOLD_TAU = 0.55;   // 가만히 누르고만 있으면 이만큼의 시간 상수로 힘이 빠집니다
   var HOLD_FLOOR = 0.22; // 다만 완전히 멈추지는 않습니다
-  var MAX_STEP = 0.05;
+  var MAX_STEP = 0.08;
 
   function Sim() {
     this.pokes = [];
@@ -1576,26 +1582,30 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     this.motion = 0;     // 이번 프레임에 실제로 일어난 변형량(소리·파츠용)
     this.drag = 0;       // 그중 문지르기 성분
     this._A = new Float32Array(MAX_POKES * 4); // u, v, 반지름, 누름량
-    this._B = new Float32Array(MAX_POKES * 4); // 끌기x, 끌기y, 소용돌이, 위상
+    this._B = new Float32Array(MAX_POKES * 4); // 끌기x, 끌기y, 파인 자국, 위상
   }
 
-  Sim.prototype.pressRate = function () { return 0.30 + this.jelly * 0.50; };
+  Sim.prototype.pressRate = function () { return 0.13 + this.jelly * 0.20; };
 
-  /* 방사 성분은 아주 약하게만 씁니다.
-   * 순수 방사 변형은 발산이 0이 아니라서, 같은 자리를 계속 누르면 그 지점의 색이
-   * 원판처럼 부풀어 화면을 덮어버립니다. 실제 반죽에서 색이 섞이는 건 소용돌이와
-   * 밀어내기(전단) 때문이므로 그쪽을 주력으로 씁니다. */
-  var RADIAL = 0.16;
+  /* 파인 자국(음영)은 기하 변형과 따로 쌓입니다.
+   * 형태가 뭉개지는 건 계속 억제하면서도, 꾹 누르고 있으면 자국은 점점 깊어져야
+   * "안으로 들어간다"로 읽힙니다. */
+  Sim.prototype.dentRate = function () { return 0.34 + this.jelly * 0.22; };
+
+  /* 잡은 자리가 손가락을 따라가는 정도. 손가락이 멀어질수록 더 끌려오되,
+   * 한 프레임에 움직일 수 있는 거리에는 상한을 둡니다. */
+  var PULL_K = 0.16;
+  var PULL_CAP = 0.0050;
 
   Sim.prototype.poke = function (u, v, radius) {
     if (this.pokes.length >= MAX_POKES) this.pokes.shift();
     var p = {
       id: this.nextId++,
-      u: u, v: v, tu: u, tv: v,
+      u: u, v: v,           // 지금 붙잡고 있는 반죽의 위치 — 처음 누른 자리에서 출발합니다
+      tu: u, tv: v,         // 손가락 위치
       radius: radius,
       energy: 1,
-      pressAmt: 0, dragX: 0, dragY: 0,
-      swirl: (Math.random() < 0.5 ? -1 : 1) * (0.72 + Math.random() * 0.5),
+      pressAmt: 0, dentAmt: 0, dragX: 0, dragY: 0,
       phase: Math.random() * 6.28318,
       held: true
     };
@@ -1608,7 +1618,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     return null;
   };
 
-  /** 손가락의 새 목표 위치. 실제 이동은 step 에서 프레임 단위로 처리합니다. */
+  /** 손가락의 새 위치. 잡은 반죽이 여기로 끌려옵니다. */
   Sim.prototype.move = function (id, u, v) {
     var p = this.find(id);
     if (p) { p.tu = u; p.tv = v; }
@@ -1631,34 +1641,36 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     this.drag = 0;
 
     var rate = this.pressRate();
+    var drate = this.dentRate();
+    var scale = Math.min(1, dt * 60);
 
     for (var i = 0; i < this.pokes.length; i++) {
       var p = this.pokes[i];
 
-      // 손가락 이동 — 조금 끌리게 따라갑니다.
-      var mx = (p.tu - p.u) * 0.55;
-      var my = (p.tv - p.v) * 0.55;
-      p.u += mx; p.v += my;
+      // 손가락과 잡은 자리의 간격만큼 반죽을 끌고 옵니다.
+      // 손가락 이동 속도가 아니라 "얼마나 멀어졌는지"가 기준이라, 잡고 당기면
+      // 손을 멈춰도 반죽이 끝까지 따라옵니다.
+      var offX = p.tu - p.u, offY = p.tv - p.v;
+      var off = Math.sqrt(offX * offX + offY * offY);
+      var pull = Math.min(off * PULL_K, PULL_CAP) * scale;
+      if (off > 1e-6) {
+        p.dragX = offX / off * pull;
+        p.dragY = offY / off * pull;
+        p.u += p.dragX; p.v += p.dragY;
+      } else {
+        p.dragX = p.dragY = 0;
+      }
 
-      var speed = Math.sqrt(mx * mx + my * my);
-
-      // 움직이면 힘이 되살아나고, 가만히 있으면 서서히 빠집니다.
-      // 가만히 누르고만 있어도 아주 느리게는 계속 뭉개집니다.
-      // 문지르면 힘이 되살아나므로, 주무를수록 훨씬 빨리 무너집니다.
+      // 가만히 눌러도 아주 느리게는 계속 눌립니다. 당기면 힘이 되살아납니다.
       p.energy = Math.max(HOLD_FLOOR, p.energy * Math.exp(-dt / HOLD_TAU));
-      p.energy = Math.min(1, p.energy + Math.min(speed * 22, 1) * 0.85);
+      p.energy = Math.min(1, p.energy + Math.min(off * 14, 1) * 0.8);
 
       p.pressAmt = rate * dt * p.energy;
+      // 음영은 힘이 빠져도 절반 이상 유지되어 계속 깊어집니다.
+      p.dentAmt = drate * dt * (0.55 + 0.45 * p.energy);
 
-      // 끌기 성분 — 한 프레임에 너무 많이 밀리지 않게 잘라냅니다.
-      // 문지를 때 한 프레임에 끌려가는 양. 크면 획 하나에 형태가 통째로 뭉개집니다.
-      var cap = 0.030;
-      var s = Math.min(speed, cap);
-      var k = speed > 1e-6 ? (s / speed) * 0.55 : 0;
-      p.dragX = mx * k; p.dragY = my * k;
-
-      this.motion += p.pressAmt + s * 1.9;
-      this.drag += s;
+      this.motion += p.pressAmt + pull * 1.6;
+      this.drag += pull;
     }
     return this.motion;
   };
@@ -1670,7 +1682,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       var p = this.pokes[i], o = i * 4;
       if (p) {
         A[o] = p.u; A[o + 1] = p.v; A[o + 2] = Math.max(p.radius, 0.001); A[o + 3] = p.pressAmt;
-        B[o] = p.dragX; B[o + 1] = p.dragY; B[o + 2] = p.swirl; B[o + 3] = p.phase;
+        B[o] = p.dragX; B[o + 1] = p.dragY; B[o + 2] = p.dentAmt; B[o + 3] = p.phase;
       } else {
         A[o] = A[o + 1] = 0; A[o + 2] = 0.001; A[o + 3] = 0;
         B[o] = B[o + 1] = B[o + 2] = B[o + 3] = 0;
@@ -1691,12 +1703,10 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
       var x2 = (rx * rx + ry * ry) / (R * R);
       if (x2 > 6.25) continue;
       var ang = Math.atan2(ry, rx);
-      var w = Math.exp(-x2 * 1.5) * (0.78 + 0.22 * Math.sin(ang * 3 + p.phase));
-      // 소용돌이(발산 0) — 부풀리지 않고 섞기만 합니다. 셰이더 disp() 와 부호가 같아야 합니다.
-      dx += -ry / R * p.pressAmt * w * p.swirl;
-      dy += rx / R * p.pressAmt * w * p.swirl;
-      dx += rx / R * p.pressAmt * w * RADIAL + p.dragX * w;
-      dy += ry / R * p.pressAmt * w * RADIAL + p.dragY * w;
+      var w = Math.exp(-x2 * 1.5) * (0.86 + 0.14 * Math.sin(ang * 3 + p.phase));
+      // 누른 자리로 딸려 들어옵니다(수축). 셰이더 disp() 와 부호가 같아야 합니다.
+      dx += -rx / R * p.pressAmt * w + p.dragX * w * w;
+      dy += -ry / R * p.pressAmt * w + p.dragY * w * w;
     }
     out[0] = dx; out[1] = dy;
     return out;
@@ -1751,9 +1761,10 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     'varying vec2 vUv;',
     'uniform sampler2D uSrc;',
     'uniform vec4 uA[6];',   // u, v, 반지름, 누름량
-    'uniform vec4 uB[6];',   // 끌기x, 끌기y, 소용돌이, 위상
+    'uniform vec4 uB[6];',   // 끌기x, 끌기y, 파인 자국, 위상
     'uniform float uFirm;',  // 실루엣을 다시 세우는 정도
     'uniform float uSkin;',  // 테두리(껍질)가 버티는 정도
+    'uniform float uDent;',  // 눌린 자국이 어두워지는 정도
     'uniform float uTexel;',
     '',
     // 이 지점이 덩어리 안쪽 얼마나 깊은지 — 껍질 판정에 씁니다.
@@ -1766,8 +1777,9 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     '  return s * 0.125;',
     '}',
     '',
-    'vec2 disp(vec2 uv){',
+    'vec2 disp(vec2 uv, out vec2 shade){',   // shade.x = 파인 그늘, shade.y = 테두리 빛
     '  vec2 d = vec2(0.0);',
+    '  shade = vec2(0.0);',
     '  for(int i = 0; i < 6; i++){',
     '    if(uA[i].z < 0.002) continue;',
     '    vec2 rel = uv - uA[i].xy;',
@@ -1775,13 +1787,18 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     '    float x2 = dot(rel, rel) / (R * R);',
     '    if(x2 > 6.25) continue;',
     '    float ang = atan(rel.y, rel.x);',
-    // 완벽한 동심원이 되지 않도록 각도로 세기를 흔들어 줍니다.
-    '    float w = exp(-x2 * 1.5) * (0.78 + 0.22 * sin(ang * 3.0 + uB[i].w));',
-    '    vec2 nrel = rel / R;',
-    // 소용돌이 — 발산이 0이라 색을 부풀리지 않고 섞기만 합니다(반죽의 핵심).
-    '    d -= vec2(-nrel.y, nrel.x) * uA[i].w * w * uB[i].z;',
-    '    d -= nrel * uA[i].w * w * 0.16;',    // 아주 약한 퍼짐 — 누르는 촉감
-    '    d -= uB[i].xy * w;',                 // 끌기 — 손가락 간 방향으로 끌려갑니다
+    // 완벽한 동심원이 되지 않도록 각도로 세기를 살짝 흔들어 줍니다.
+    '    float w = exp(-x2 * 1.5) * (0.86 + 0.14 * sin(ang * 3.0 + uB[i].w));',
+    // 누르면 안으로 들어갑니다. 바깥에서 샘플을 가져오면 주변 반죽이 눌린 자리로
+    // 딸려 들어와 파인 것처럼 보입니다. 반대 방향(확대)은 그 지점 색이 원판처럼
+    // 부풀어 버리므로 쓰지 않습니다.
+    '    d += rel / R * uA[i].w * w;',
+    // 끌기는 더 좁은 범위에만 먹입니다(w 제곱). 잡은 자리만 늘어나고
+    // 주변 전체가 통째로 밀려가지 않습니다.
+    '    d -= uB[i].xy * w * w;',
+    '    float x = sqrt(x2);',
+    '    shade.x += uB[i].z * w;',                                  // 가운데가 가장 깊게
+    '    shade.y += uB[i].z * exp(-(x - 1.2) * (x - 1.2) * 3.0);',  // 가장자리는 볼록하게
     '  }',
     '  return d;',
     '}',
@@ -1790,11 +1807,19 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     // 그림 테두리는 슬라임의 껍질입니다. 가장자리에 가까운 픽셀일수록 붙들려서
     // 잘 밀리지 않으므로, 안쪽만 뭉개지고 실루엣은 오래 버팁니다.
     '  float core = smoothstep(0.22, 0.94, coreAt(vUv, uTexel * 17.0));',
-    '  vec2 d = disp(vUv) * mix(1.0 - uSkin * 0.90, 1.0, core);',
+    '  float hold = mix(1.0 - uSkin * 0.90, 1.0, core);',
+    '  vec2 shade;',
+    '  vec2 d = disp(vUv, shade) * hold;',
+    '  shade *= hold;',
     '  vec4 c = texture2D(uSrc, clamp(vUv + d, 0.0, 1.0));',
     // 알파까지 계속 번지면 실루엣이 안개처럼 사라지므로 아주 약하게 다시 세웁니다.
     '  float a = clamp((c.a - 0.5) * uFirm + 0.5, 0.0, 1.0);',
     '  vec3 rgb = c.a > 0.002 ? c.rgb * (a / c.a) : vec3(0.0);',
+    // 눌린 자리는 그늘이 져야 파인 것으로 보입니다. 이미 어두운 곳은 덜 어둡게 해서
+    // 계속 눌러도 새까매지지 않습니다.
+    '  float lum = dot(rgb, vec3(0.299, 0.587, 0.114));',
+    '  rgb *= 1.0 - shade.x * uDent * smoothstep(0.22, 0.58, lum);',
+    '  rgb += vec3(shade.y * uDent * 0.30 * smoothstep(1.05, 0.30, lum));',
     '  gl_FragColor = vec4(rgb, a);',
     '}'
   ].join('\n');
@@ -1992,7 +2017,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
 
     this.params = {
       gloss: 0.55, rim: 0.4, tint: [0.55, 0.91, 1.0], tintAmt: 0.18,
-      depth: 0.55, zoom: 0.88, shadow: 0.2, firm: 1.032, crust: 0.72,
+      depth: 0.55, zoom: 0.88, shadow: 0.2, firm: 1.032, crust: 0.72, dent: 1.25,
       bg: [0.99, 0.95, 0.97, 1]
     };
     this.resize();
@@ -2098,6 +2123,7 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
     // 값 하나라도 NaN 이면 텍스처 전체가 날아가므로 여기서 막습니다.
     var crust = +this.params.crust;
     gl.uniform1f(this.pKnead.u.uSkin, isFinite(crust) ? crust : 0.7);
+    gl.uniform1f(this.pKnead.u.uDent, this.params.dent);
     gl.uniform1f(this.pKnead.u.uTexel, 1 / this.simSize);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex[this.cur]);
@@ -2584,15 +2610,25 @@ input[type=color]::-moz-color-swatch{border:none; border-radius:6px}
 
     sim.jelly = S.jelly;
     sim.wobble = S.wobble;
-    sim.step(dt);
 
-    if (sim.active() && sim.motion > 0.00002) {
+    // 프레임이 느려도 같은 시간만큼 반죽되도록 잘게 나눠 돌립니다.
+    // 한 프레임에 몰아서 처리하면 느린 기기에서 훨씬 덜 눌리게 됩니다.
+    var steps = Math.min(4, Math.max(1, Math.round(dt / 0.02)));
+    var h = dt / steps;
+    var moved = 0, motion = 0;
+    for (var i = 0; i < steps; i++) {
+      sim.step(h);
+      if (!sim.active() || sim.motion <= 0.00002) break;
       renderer.knead(sim);                    // 텍스처에 변형을 영구히 새깁니다
-      if (movePartsWith(sim) > 0) updateGeometry();
-      kneaded = Math.min(1, kneaded + sim.motion * 1.6);
+      moved += movePartsWith(sim);
+      motion += sim.motion;
+    }
+    if (motion > 0) {
+      if (moved > 0) updateGeometry();
+      kneaded = Math.min(1, kneaded + motion * 1.6);
       if (kneaded > 0.002) updateResetState();
       // 실제로 뭉개지는 양에 맞춰 마찰음이 이어집니다.
-      if (sim.motion > 0.0005) Audio.rub(clamp(sim.motion * 75, 0.05, 0.6), partLoad());
+      if (motion > 0.0005) Audio.rub(clamp(motion * 75, 0.05, 0.6), partLoad());
     }
 
     renderer.render(sim);

@@ -37,9 +37,10 @@
     'varying vec2 vUv;',
     'uniform sampler2D uSrc;',
     'uniform vec4 uA[6];',   // u, v, 반지름, 누름량
-    'uniform vec4 uB[6];',   // 끌기x, 끌기y, 소용돌이, 위상
+    'uniform vec4 uB[6];',   // 끌기x, 끌기y, 파인 자국, 위상
     'uniform float uFirm;',  // 실루엣을 다시 세우는 정도
     'uniform float uSkin;',  // 테두리(껍질)가 버티는 정도
+    'uniform float uDent;',  // 눌린 자국이 어두워지는 정도
     'uniform float uTexel;',
     '',
     // 이 지점이 덩어리 안쪽 얼마나 깊은지 — 껍질 판정에 씁니다.
@@ -52,8 +53,9 @@
     '  return s * 0.125;',
     '}',
     '',
-    'vec2 disp(vec2 uv){',
+    'vec2 disp(vec2 uv, out vec2 shade){',   // shade.x = 파인 그늘, shade.y = 테두리 빛
     '  vec2 d = vec2(0.0);',
+    '  shade = vec2(0.0);',
     '  for(int i = 0; i < 6; i++){',
     '    if(uA[i].z < 0.002) continue;',
     '    vec2 rel = uv - uA[i].xy;',
@@ -61,13 +63,18 @@
     '    float x2 = dot(rel, rel) / (R * R);',
     '    if(x2 > 6.25) continue;',
     '    float ang = atan(rel.y, rel.x);',
-    // 완벽한 동심원이 되지 않도록 각도로 세기를 흔들어 줍니다.
-    '    float w = exp(-x2 * 1.5) * (0.78 + 0.22 * sin(ang * 3.0 + uB[i].w));',
-    '    vec2 nrel = rel / R;',
-    // 소용돌이 — 발산이 0이라 색을 부풀리지 않고 섞기만 합니다(반죽의 핵심).
-    '    d -= vec2(-nrel.y, nrel.x) * uA[i].w * w * uB[i].z;',
-    '    d -= nrel * uA[i].w * w * 0.16;',    // 아주 약한 퍼짐 — 누르는 촉감
-    '    d -= uB[i].xy * w;',                 // 끌기 — 손가락 간 방향으로 끌려갑니다
+    // 완벽한 동심원이 되지 않도록 각도로 세기를 살짝 흔들어 줍니다.
+    '    float w = exp(-x2 * 1.5) * (0.86 + 0.14 * sin(ang * 3.0 + uB[i].w));',
+    // 누르면 안으로 들어갑니다. 바깥에서 샘플을 가져오면 주변 반죽이 눌린 자리로
+    // 딸려 들어와 파인 것처럼 보입니다. 반대 방향(확대)은 그 지점 색이 원판처럼
+    // 부풀어 버리므로 쓰지 않습니다.
+    '    d += rel / R * uA[i].w * w;',
+    // 끌기는 더 좁은 범위에만 먹입니다(w 제곱). 잡은 자리만 늘어나고
+    // 주변 전체가 통째로 밀려가지 않습니다.
+    '    d -= uB[i].xy * w * w;',
+    '    float x = sqrt(x2);',
+    '    shade.x += uB[i].z * w;',                                  // 가운데가 가장 깊게
+    '    shade.y += uB[i].z * exp(-(x - 1.2) * (x - 1.2) * 3.0);',  // 가장자리는 볼록하게
     '  }',
     '  return d;',
     '}',
@@ -76,11 +83,19 @@
     // 그림 테두리는 슬라임의 껍질입니다. 가장자리에 가까운 픽셀일수록 붙들려서
     // 잘 밀리지 않으므로, 안쪽만 뭉개지고 실루엣은 오래 버팁니다.
     '  float core = smoothstep(0.22, 0.94, coreAt(vUv, uTexel * 17.0));',
-    '  vec2 d = disp(vUv) * mix(1.0 - uSkin * 0.90, 1.0, core);',
+    '  float hold = mix(1.0 - uSkin * 0.90, 1.0, core);',
+    '  vec2 shade;',
+    '  vec2 d = disp(vUv, shade) * hold;',
+    '  shade *= hold;',
     '  vec4 c = texture2D(uSrc, clamp(vUv + d, 0.0, 1.0));',
     // 알파까지 계속 번지면 실루엣이 안개처럼 사라지므로 아주 약하게 다시 세웁니다.
     '  float a = clamp((c.a - 0.5) * uFirm + 0.5, 0.0, 1.0);',
     '  vec3 rgb = c.a > 0.002 ? c.rgb * (a / c.a) : vec3(0.0);',
+    // 눌린 자리는 그늘이 져야 파인 것으로 보입니다. 이미 어두운 곳은 덜 어둡게 해서
+    // 계속 눌러도 새까매지지 않습니다.
+    '  float lum = dot(rgb, vec3(0.299, 0.587, 0.114));',
+    '  rgb *= 1.0 - shade.x * uDent * smoothstep(0.22, 0.58, lum);',
+    '  rgb += vec3(shade.y * uDent * 0.30 * smoothstep(1.05, 0.30, lum));',
     '  gl_FragColor = vec4(rgb, a);',
     '}'
   ].join('\n');
@@ -278,7 +293,7 @@
 
     this.params = {
       gloss: 0.55, rim: 0.4, tint: [0.55, 0.91, 1.0], tintAmt: 0.18,
-      depth: 0.55, zoom: 0.88, shadow: 0.2, firm: 1.032, crust: 0.72,
+      depth: 0.55, zoom: 0.88, shadow: 0.2, firm: 1.032, crust: 0.72, dent: 1.25,
       bg: [0.99, 0.95, 0.97, 1]
     };
     this.resize();
@@ -384,6 +399,7 @@
     // 값 하나라도 NaN 이면 텍스처 전체가 날아가므로 여기서 막습니다.
     var crust = +this.params.crust;
     gl.uniform1f(this.pKnead.u.uSkin, isFinite(crust) ? crust : 0.7);
+    gl.uniform1f(this.pKnead.u.uDent, this.params.dent);
     gl.uniform1f(this.pKnead.u.uTexel, 1 / this.simSize);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex[this.cur]);

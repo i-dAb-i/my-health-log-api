@@ -18,7 +18,7 @@
   var noiseBuf = null;
   var state = { volume: 0.75, reverb: 0.22, muted: false, preset: 'crunch', partTags: [], usePartTags: true };
   var voices = 0, lastRub = 0;
-  var MAX_VOICES = 48;
+  var MAX_VOICES = 96;
 
   function rnd(a, b) { return a + Math.random() * (b - a); }
 
@@ -58,9 +58,9 @@
     // 맑고 높은 성분은 여기서 한 번 더 눌러 둡니다. 개별 음색이 어떻게 바뀌든
     // 이 지점을 통과하므로 쨍한 소리가 새어 나오지 않습니다.
     tone = ctx.createBiquadFilter();
-    tone.type = 'lowpass'; tone.frequency.value = 3800; tone.Q.value = 0.6;
+    tone.type = 'lowpass'; tone.frequency.value = 6500; tone.Q.value = 0.55;
     shelf = ctx.createBiquadFilter();
-    shelf.type = 'highshelf'; shelf.frequency.value = 1800; shelf.gain.value = -9;
+    shelf.type = 'highshelf'; shelf.frequency.value = 3000; shelf.gain.value = -4;
 
     verb = ctx.createConvolver();
     verb.buffer = makeImpulse(1.7, 2.6);
@@ -94,28 +94,6 @@
   /* ------------------------------------------------------------------ */
   /* 기본 음색 빌딩 블록                                                  */
   /* ------------------------------------------------------------------ */
-
-  /** 알갱이 노이즈 폭발 — 바삭바삭한 크런치 */
-  function grains(t0, o) {
-    var n = o.count | 0;
-    for (var i = 0; i < n; i++) {
-      if (voices > MAX_VOICES) return;
-      var t = t0 + Math.pow(Math.random(), 1.5) * o.spread;
-      var src = noiseSource(rnd(0.8, 1.6));
-      var bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = rnd(o.fmin, o.fmax);
-      bp.Q.value = o.q || rnd(3, 11);
-      var g = ctx.createGain();
-      var dur = rnd(o.dmin || 0.008, o.dmax || 0.03);
-      var peak = o.gain * rnd(0.45, 1);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(peak, t + 0.0016);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      src.connect(bp); bp.connect(g); g.connect(master);
-      src.start(t); track(src, t + dur + 0.02);
-    }
-  }
 
   /** 필터 스윕 노이즈 — 축축한 스퀴시 */
   function sweep(t0, o) {
@@ -167,6 +145,48 @@
     src.start(t0); track(src, t0 + o.dur + 0.02);
   }
 
+  /**
+   * 하나의 파열(조각 하나가 부서지는 순간).
+   * 어택이 순간적이어야 "딱" 하고 갈라지는 소리가 됩니다. 서서히 올리면
+   * 알갱이가 뭉개져서 "쉬익" 하는 바람 소리로 들립니다.
+   */
+  function crackEvent(t, amp, big) {
+    if (voices > MAX_VOICES) return;
+    var src = noiseSource(rnd(0.75, 1.6));
+    var bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    // 큰 조각일수록 낮고 길게, 잔 조각일수록 높고 짧게 부서집니다.
+    var f = big ? rnd(420, 1400) : rnd(1500, 5200);
+    bp.frequency.setValueAtTime(f, t);
+    bp.frequency.exponentialRampToValueAtTime(f * rnd(0.42, 0.72), t + (big ? 0.055 : 0.016));
+    bp.Q.value = big ? rnd(4, 9) : rnd(8, 18);
+    var g = ctx.createGain();
+    var dur = big ? rnd(0.040, 0.090) : rnd(0.004, 0.016);
+    g.gain.setValueAtTime(Math.max(0.0003, amp), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp); bp.connect(g); g.connect(master);
+    src.start(t); track(src, t + dur + 0.02);
+  }
+
+  /**
+   * 와그작 — 여러 조각이 잇달아 부서지는 소리.
+   * 진폭을 넓게 흩뿌리는 게 핵심입니다. 크기가 고르면 백색소음처럼 들리고,
+   * 큰 놈 몇 개 + 잔 놈 여럿이어야 "우두둑 자그작"으로 들립니다.
+   */
+  function crackle(t0, v, load) {
+    var span = 0.09 + load * 0.15;
+    var big = Math.round(1 + load * 3);
+    var small = Math.round(6 + load * 26);
+    var i;
+    for (i = 0; i < big; i++) {
+      crackEvent(t0 + Math.pow(Math.random(), 1.5) * span, v * rnd(0.20, 0.38), true);
+    }
+    for (i = 0; i < small; i++) {
+      var a = Math.pow(Math.random(), 2.2);   // 대부분 작고 가끔 크게
+      crackEvent(t0 + Math.pow(Math.random(), 1.15) * span, v * (0.035 + a * 0.30), false);
+    }
+  }
+
   /** 낮은 "툭" — 사인파 대신 저역 노이즈라 훨씬 덜 인공적입니다. */
   function thud(t0, v) {
     if (voices > MAX_VOICES) return;
@@ -195,13 +215,13 @@
     glass:  { f0: 560, f1: 2000, f2: 440, q: 7.0, dur: 0.22, wet: 0.80, pops: 0.30 }
   };
 
-  function slimePress(t, v) {
+  function slimePress(t, v, load) {
     var m = SLIME[state.preset] || SLIME.squish;
     var j = rnd(0.9, 1.14);   // 누를 때마다 조금씩 달라지게
     sweep(t, {
       type: 'bandpass', q: m.q * rnd(0.85, 1.2),
       f0: m.f0 * j, f1: m.f1 * j, f2: m.f2 * j,
-      dur: m.dur * rnd(0.85, 1.2), gain: 0.30 * v
+      dur: m.dur * rnd(0.85, 1.2), gain: 0.30 * v * (1 - 0.28 * (load || 0))
     });
     sweep(t + 0.012, {
       type: 'lowpass', q: 2.6,
@@ -218,9 +238,7 @@
   /* 파츠끼리 부딪히는 와그작 — 파츠가 들어 있을 때만 납니다.              */
   /* ------------------------------------------------------------------ */
   var TAGS = {
-    crunch: function (t, v) {
-      grains(t, { count: Math.round(6 + v * 14), spread: 0.09, fmin: 700, fmax: 3200, gain: 0.28 * v, dmin: 0.005, dmax: 0.026 });
-    },
+    crunch: function (t, v) { crackle(t, v, 0.5); },
     squish: function (t, v) {
       sweep(t, { f0: 420, f1: 1500, f2: 260, q: 8, dur: 0.20, gain: 0.20 * v });
     },
@@ -248,22 +266,14 @@
    */
   function partCrunch(t, v, load) {
     if (load <= 0.001 || !state.usePartTags) return;
-    var amt = v * (0.35 + load * 0.65);
-    grains(t + rnd(0, 0.012), {
-      count: Math.round((3 + load * 20) * v),
-      spread: 0.05 + load * 0.10,
-      fmin: 650, fmax: 3000, gain: 0.30 * amt, dmin: 0.005, dmax: 0.030
-    });
-    grains(t + rnd(0.015, 0.045), {
-      count: Math.round((2 + load * 8) * v),
-      spread: 0.09 + load * 0.09,
-      fmin: 260, fmax: 1200, q: 2.4, gain: 0.19 * amt, dmin: 0.012, dmax: 0.055
-    });
-    // 넣은 파츠 종류의 색을 얹습니다(유리는 쨍하게, 구슬은 또르륵).
+    crackle(t, v * (0.55 + load * 0.45), load);
+    // 넣은 파츠 종류의 색을 살짝 얹습니다.
     var tags = state.partTags;
     for (var i = 0; i < tags.length; i++) {
       var fn = TAGS[tags[i]];
-      if (fn && Math.random() < 0.55 + load * 0.4) fn(t + rnd(0, 0.04), amt * (0.5 / Math.sqrt(tags.length)));
+      if (fn && Math.random() < 0.45 + load * 0.35) {
+        fn(t + rnd(0, 0.04), v * load * (0.42 / Math.sqrt(tags.length)));
+      }
     }
   }
 
@@ -281,8 +291,8 @@
       if (state.muted || !init()) return;
       var t = ctx.currentTime + 0.001;
       var v = Math.max(0.15, Math.min(1, intensity == null ? 0.8 : intensity));
-      slimePress(t, v);
-      partCrunch(t + 0.008, v, load || 0);
+      slimePress(t, v, load || 0);
+      partCrunch(t + 0.006, v, load || 0);
     },
 
     /** 문지르기 — 너무 자주 울리지 않도록 간격을 둡니다. */
@@ -299,11 +309,7 @@
         dur: 0.14, gain: 0.19 * v
       });
       if (load > 0.001 && state.usePartTags) {
-        grains(now + 0.001, {
-          count: Math.round((1 + load * 9) * v * 2),
-          spread: 0.055, fmin: 750, fmax: 3100,
-          gain: 0.22 * v * (0.4 + load * 0.6), dmin: 0.004, dmax: 0.020
-        });
+        crackle(now + 0.001, v * 1.15, load * 0.55);
       }
     },
 

@@ -336,15 +336,25 @@
 
     sim.jelly = S.jelly;
     sim.wobble = S.wobble;
-    sim.step(dt);
 
-    if (sim.active() && sim.motion > 0.00002) {
+    // 프레임이 느려도 같은 시간만큼 반죽되도록 잘게 나눠 돌립니다.
+    // 한 프레임에 몰아서 처리하면 느린 기기에서 훨씬 덜 눌리게 됩니다.
+    var steps = Math.min(4, Math.max(1, Math.round(dt / 0.02)));
+    var h = dt / steps;
+    var moved = 0, motion = 0;
+    for (var i = 0; i < steps; i++) {
+      sim.step(h);
+      if (!sim.active() || sim.motion <= 0.00002) break;
       renderer.knead(sim);                    // 텍스처에 변형을 영구히 새깁니다
-      if (movePartsWith(sim) > 0) updateGeometry();
-      kneaded = Math.min(1, kneaded + sim.motion * 1.6);
+      moved += movePartsWith(sim);
+      motion += sim.motion;
+    }
+    if (motion > 0) {
+      if (moved > 0) updateGeometry();
+      kneaded = Math.min(1, kneaded + motion * 1.6);
       if (kneaded > 0.002) updateResetState();
       // 실제로 뭉개지는 양에 맞춰 마찰음이 이어집니다.
-      if (sim.motion > 0.0005) Audio.rub(clamp(sim.motion * 75, 0.05, 0.6), partLoad());
+      if (motion > 0.0005) Audio.rub(clamp(motion * 75, 0.05, 0.6), partLoad());
     }
 
     renderer.render(sim);
